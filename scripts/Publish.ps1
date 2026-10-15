@@ -72,10 +72,7 @@ foreach ($tool in @('python/python.exe', 'yt-dlp/yt-dlp.exe', 'mpv/mpv.exe', 'de
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot "runtime/$tool"))) { throw "Missing runtime/$tool. Run Bootstrap first." }
 }
 Assert-RuntimeExecutables $projectRoot $runtimeLock
-foreach ($document in @('README.md', 'VERIFICATION.md', 'TOOLCHAIN.md', 'CHANGES_AFTER_PROFILE.txt')) {
-    if (-not (Test-Path -LiteralPath (Join-Path $projectRoot $document))) { throw "Missing release document: $document" }
-}
-foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py', 'README.md')) {
+foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py')) {
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot "worker/$workerFile"))) { throw "Missing worker file: $workerFile" }
 }
 Assert-RuntimeNotices $projectRoot $runtimeLock
@@ -112,12 +109,16 @@ function Copy-RuntimeTree([string]$Source, [string]$Destination) {
 Copy-RuntimeTree (Join-Path $projectRoot 'runtime') (Join-Path $output 'runtime')
 $workerOutput = Join-Path $output 'worker'
 New-Item -ItemType Directory -Path $workerOutput -Force | Out-Null
-foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py', 'README.md')) {
+foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py')) {
     Assert-RegularPublishPath (Join-Path $projectRoot "worker/$workerFile")
     Copy-Item -LiteralPath (Join-Path $projectRoot "worker/$workerFile") -Destination $workerOutput
 }
-foreach ($document in @('README.md', 'VERIFICATION.md', 'TOOLCHAIN.md', 'CHANGES_AFTER_PROFILE.txt')) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot $document) -Destination $output
+foreach ($document in @('README.md', 'VERIFICATION.md', 'TOOLCHAIN.md', 'CHANGES_AFTER_PROFILE.txt', 'worker/README.md')) {
+    $documentPath = Join-Path $projectRoot $document
+    if (Test-Path -LiteralPath $documentPath -PathType Leaf) {
+        Assert-RegularPublishPath $documentPath
+        Copy-Item -LiteralPath $documentPath -Destination (Join-Path $output $document)
+    }
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'dependencies.lock.json') -Destination $output
 Copy-Item -LiteralPath $nugetLock -Destination (Join-Path $output 'nuget-packages.lock.json')
