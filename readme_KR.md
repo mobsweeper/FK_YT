@@ -13,8 +13,8 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 *계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
 
-> **README 초안 · 2026-10-16**
-> 현재 GitHub에는 소스만 올라와 있습니다. NSIS 설치형 EXE와 포터블 ZIP은 제공 예정이며, 아직 릴리스하지 않았습니다. 설치 파일명·NSIS 버전·설치 및 제거 동작은 패키지가 확정되면 갱신합니다.
+> **1.0 배포 현황 · 2026-10-16 확인**
+> 설치형 EXE와 포터블 ZIP 제작 및 아래 범위의 로컬 검증을 마쳤습니다. 현재 저장소는 **비공개**, `v1.0` 릴리스는 **드래프트**이며, 아직 일반 사용자가 다운로드할 수 있는 공개 릴리스는 없습니다. 드래프트에는 외부 구성 요소의 대응 소스 3개와 해시 파일만 첨부되어 있습니다. [파일·해시·공개 전 남은 작업](docs/RELEASE-1.0.md)을 확인해 주세요.
 
 ## 1. 언어 선택
 
@@ -75,76 +75,93 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 ## 5. 실행 환경
 
-- 대상: **Windows 10 / Windows 11, x64**.
-- 실제 사용 테스트: **Windows 10 22H2에서만 진행**. Windows 11에서 동일하게 동작한다는 검증은 아직 없습니다.
-- 로그인 연결: Firefox 또는 직접 준비한 Netscape 형식 쿠키 파일. 로그인 없이 검색·일부 영상 재생도 가능합니다.
-- 소스 빌드: **PowerShell 7**, Git, 인터넷 연결. 아래 CLI 예제는 GitHub CLI도 사용합니다.
-- 배포본은 .NET 런타임과 필요한 실행 도구를 함께 묶는 형태를 목표로 합니다. 소스 ZIP만으로 바로 실행되지는 않습니다.
+- 설치기가 허용하는 최소 조건: **Windows 10 22H2, 빌드 19045 이상, x64(AMD64)**. Windows 11 x64도 대상입니다. x86·ARM64는 설치 대상이 아닙니다. “Windows 10 전체 지원”이라는 뜻은 아닙니다.
+- 실제 설치·실행·업데이트·기본 제거 시험: **Windows 10 Pro 22H2 x64, 19045.6456**. 개발 도구가 있는 PC에서 확인했으며, 깨끗한 Windows 11 표준 사용자 환경은 아직 시험하지 않았습니다.
+- 설치 허용 조건과 공급자의 지원 정책은 별개입니다. 테스트한 Windows 10 Pro 22H2를 .NET 10의 공식 지원 환경이라고 주장하지 않습니다. 에디션·수명 주기는 [.NET 10 지원 OS 표](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)를 확인하세요.
+- 일반 사용자는 **.NET·Python·Deno·mpv·FFmpeg나 SDK를 따로 설치할 필요가 없습니다.** 실행에 쓰는 런타임·도구는 앱 폴더에 포함되어 있습니다. 설치기는 Windows 기본 64비트 PowerShell을 사용합니다.
+- 로그인 연결에는 Firefox 또는 직접 준비한 Netscape 형식 쿠키 파일을 사용합니다. 로그인 없이 검색·일부 영상 재생도 가능합니다.
 
-현재 소스의 [의존성 잠금 파일](dependencies.lock.json)과 프로젝트 파일 기준 버전입니다. 최종 1.0 설치 파일의 실제 구성과 다르면 릴리스 시 이 표를 갱신합니다.
+아래는 최종 clean 포터블과 이를 그대로 넣은 설치기의 실제 구성입니다. 예전 다운로드 대상을 기록한 [의존성 잠금 파일](dependencies.lock.json)만으로 만든 표가 아닙니다.
 
-| 구성 요소 | 버전 | 역할 |
+| 배포에 포함된 구성 요소 | 버전 / 빌드 | 역할 |
 | --- | --- | --- |
-| .NET SDK | 10.0.402 | `net10.0-windows` WPF 빌드 |
-| Python | 3.13.16, embedded x64 | 목록·계정 등 작업자 |
-| yt-dlp EXE / Python 패키지 | 2026.08.19 / 2026.8.19 | 추출·메타데이터·다운로드 |
-| yt-dlp-ejs | 0.8.0 | yt-dlp JavaScript 지원 |
-| Deno | 2.9.7 | JavaScript 런타임 |
-| mpv | 20261014 / `ec38361c56` 빌드 | 영상 재생 |
-| FFmpeg / ffprobe | 9.0.2 | 영상·음성 처리 |
-| 7zr | 26.04 | 개발 도구·런타임 압축 해제 |
-| Microsoft.Data.Sqlite | 10.0.13 | 로컬 DB |
-| SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 | SQLite 네이티브 연동 |
-| NSIS | 미확정 | 예정된 설치형 EXE 제작 도구 |
+| .NET / Windows Desktop Runtime | 둘 다 **10.0.13**, self-contained win-x64 | WPF 앱 실행 |
+| Python | **3.13.16**, embedded x64 | 목록·계정 등 작업자 |
+| yt-dlp EXE / Python 패키지 | **2026.08.19 / 2026.8.19** | 추출·메타데이터·다운로드 |
+| yt-dlp EXE 내부 Python | **3.10.11** | 위 작업자 Python과 별개의 번들 |
+| yt-dlp-ejs | **0.8.0** | JavaScript 처리 지원 |
+| Deno | **2.9.7** | JavaScript 런타임 |
+| mpv | **0.41.0-dev-gec38361c56-fkyt** | FK_YT에서 준비한 빌드; 영상 재생 |
+| FFmpeg / ffprobe | **9.0.2**, MSYS2 UCRT64 `9.0.2-1` | GPLv3 활성화 공유 라이브러리 빌드 |
+| Microsoft.Data.Sqlite / SQLitePCLRaw | **10.0.13 / 3.0.5** | 로컬 DB |
+| 네이티브 SQLite 패키지 | **3.53.4** | Python에 포함된 SQLite와는 별개 |
+
+빌드 전용 도구는 **.NET SDK 10.0.402**, 압축 해제용 **7zr 26.04**, 설치기 제작용 **NSIS 3.13**입니다. SDK·컴파일러·7zr는 사용자용 앱 폴더에 설치하지 않습니다. 설치기는 NSIS **Unicode / Modern UI 2(MUI2), 영어 한 언어, zlib 압축**을 사용합니다. NSIS의 x86 Unicode 실행 엔진이 x64 앱을 설치하는 구조입니다.
 
 ## 6. 설치 및 구동
 
-### 일반 사용자: 릴리스 파일 — 제공 예정
+### 일반 사용자: 어떤 파일을 받으면 되나요?
 
-[GitHub Releases](https://github.com/mobsweeper/FK_YT/releases)에 설치형 EXE와 포터블 ZIP을 제공할 예정입니다. **이 초안 작성 시점에는 릴리스가 없습니다.** GitHub의 `Code → Download ZIP`은 소스이므로 설치 파일로 사용하면 안 됩니다.
+보통은 **`FK_YT-1.0-Setup-x64.exe`** 하나를 받으면 됩니다. 설치 없이 폴더째 쓰고 싶다면 **`1.0 portable.zip`**을 선택하세요. 두 파일은 로컬에 완성되어 있지만 **아직 GitHub에 첨부·공개하지 않았습니다.** 공개되면 [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases)의 `v1.0`에서 받는 방식입니다. `Code → Download ZIP`과 `1.0 source.zip`은 개발용 소스입니다.
 
-- **NSIS 설치형 EXE:** 게시된 설치 프로그램을 실행하는 방식으로 준비합니다. 설치 위치·바로가기·업데이트·제거 시 데이터 보존 여부는 설치 프로그램 구현 후 안내합니다.
-- **포터블 ZIP:** 게시 후에는 ZIP을 쓰기 가능한 새 폴더에 전부 풀고 `FK_YT.exe`를 실행합니다. `runtime/`, `worker/`, DLL, 라이선스 고지 파일을 임의로 빼지 마세요.
-- 현재 포터블 구조에서는 앱 데이터가 `data/`에 있습니다. 옮길 때는 앱을 종료하고 원본을 먼저 보관하세요. 다른 PC나 Windows 계정에서는 로그인 세션을 다시 연결해야 할 수 있습니다.
+| 구분 | 설치형 EXE | 포터블 ZIP |
+| --- | --- | --- |
+| 시작 방법 | EXE 실행 → 영어 안내에 따라 설치 → `Launch FK_YT` 또는 시작 메뉴의 FK_YT | 새 폴더에 **전부** 압축 해제 → `FK_YT` 폴더의 `FK_YT.exe` 실행 |
+| 기본 위치 | `%LOCALAPPDATA%\Programs\FK_YT` | 직접 압축을 푼, 쓰기 가능한 폴더 |
+| 관리자 권한 | 필요 없음; 현재 Windows 사용자용 | 필요 없음; 쓰기 가능한 위치 사용 |
+| 바로가기 | 시작 메뉴 생성, 바탕화면은 선택 사항(기본 꺼짐) | 자동 생성하지 않음 |
+| 데이터 | `%LOCALAPPDATA%\Programs\FK_YT\data` — 경로를 바꾸면 `<설치 폴더>\data` | `<압축 해제한 FK_YT 폴더>\data` |
+| 제거 | Windows의 앱 제거 또는 설치 폴더의 `Uninstall.exe` | 앱을 닫고 폴더 삭제; `data`도 지우면 데이터까지 삭제됨 |
 
-GitHub CLI가 있다면 **릴리스가 게시된 뒤** 다음 명령으로 EXE 자산을 받을 수 있습니다. 지금은 릴리스가 없으므로 다운로드가 실패하는 것이 정상입니다. 다운로드만 하며 설치 파일을 자동 실행하지 않습니다.
+설치 위치는 비어 있는 폴더나 이 설치기가 관리하는 기존 설치 폴더여야 합니다. 포터블 폴더 위에 바로 설치하지 마세요. 설치 경로는 100자 이내여야 합니다. `runtime/`, `worker/`, DLL과 라이선스 고지는 그대로 두세요.
+
+**설치 자체는 오프라인으로 가능합니다.** 필요한 런타임을 인터넷에서 추가로 받는 설치기가 아닙니다. YouTube 탐색·스트리밍·댓글·다운로드·RYD 수치 조회에는 인터넷이 필요합니다. 앱의 한국어·영어·일본어 선택은 영어 설치 화면과 별개이며 계정·지역 설정을 바꾸지 않습니다.
+
+### 업데이트와 데이터 보존
+
+- **설치형:** 앱을 종료하고 새 설치기를 실행해 **기존 설치 위치**를 선택합니다. 설정·로그인 정보·기록·이어보기와 직접 추가한 파일은 보존합니다. 실행 중인 앱을 닫지 않으면 업데이트가 거부될 수 있습니다. 자동 온라인 업데이트 기능은 없습니다.
+- **포터블:** 앱을 종료하고 기존 폴더를 먼저 보관합니다. 새 ZIP은 별도의 빈 폴더에 풀고, 보관한 `data/`를 새 `FK_YT/` 안에 복사한 뒤 실행하세요. 설치형으로 옮길 때도 설치를 마치고 앱이 닫힌 상태에서 복사합니다.
+- 로그인 정보는 Windows 사용자 계정에 묶여 있습니다. 다른 PC·Windows 계정으로 옮기면 로그인 연결을 다시 해야 할 수 있습니다.
+
+### 제거할 때 무엇이 남나요?
+
+설치형은 Windows **설정 → 앱 → FK_YT → 제거** 또는 `Uninstall.exe`로 제거합니다. 기본값은 **설정·로그인 정보·시청 기록·이어보기 보존**입니다. `Also permanently delete this installation's data folder`를 선택하고 추가 확인에 동의할 때만 해당 `data/`도 삭제합니다. 직접 추가하거나 변경한 파일은 남을 수 있습니다. 앱 밖에 저장한 다운로드 파일은 별도입니다.
+
+기본 제거 후 남은 `data/` 폴더는 자동으로 새 설치본으로 인식하지 않습니다. 다시 설치할 때는 데이터를 먼저 별도로 보관하고 빈 폴더에 설치한 뒤, 앱을 닫고 `data/`를 복원하세요.
+
+### 파일 확인과 다운로드 명령
+
+최종 설치 EXE는 **코드 서명 없음(`NotSigned`)**으로 확인했습니다. 실제 배포 다운로드 후의 SmartScreen 경고 유무·문구는 시험하지 않았으므로 특정 경고가 반드시 뜬다고 단정하지 않습니다. [SHA256SUMS.txt](SHA256SUMS.txt)는 현재 설치 EXE와 포터블 ZIP 두 파일의 해시입니다. PowerShell에서 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.0-Setup-x64.exe'`로 비교할 수 있습니다. 해시는 파일 일치 확인용이며 코드 서명을 대신하지는 않습니다.
+
+아래는 **`v1.0` 게시와 해당 파일 첨부가 끝난 뒤에만** 사용하는 명령입니다. 지금은 비공개 드래프트이고 EXE·포터블 자산도 없어서 일반 사용자의 다운로드 명령으로 사용할 수 없습니다.
 
 ```powershell
-gh release view --repo mobsweeper/FK_YT
-gh release download --repo mobsweeper/FK_YT --pattern '*.exe' --dir .\FK_YT-download
+gh release view v1.0 --repo mobsweeper/FK_YT
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
+# 포터블을 원하면 위 다운로드 대신:
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --dir .\FK_YT-download
 ```
 
-비공개 저장소인 동안에는 저장소 접근 권한과 GitHub 로그인이 필요합니다. [GitHub CLI 다운로드 명령 안내](https://cli.github.com/manual/gh_release_download)
+### 개발자: 저장소 빌드와 최종 배포본은 구분해 주세요
 
-### 개발자: 소스에서 실행하기
+**현재 GitHub 앱 소스는 최종 clean 배포본의 소스와 같지 않습니다.** GitHub에는 clean에서 제거한 진단 실행 경로·파일이 남아 있습니다. 최종 앱 소스는 `1.0 source.zip`이며, 구체적인 차이와 재빌드 경계는 [배포 안내](docs/RELEASE-1.0.md#source-and-build-boundaries)에 적었습니다. 이번 문서 정리로 소스를 동기화한 것은 아닙니다.
 
-필요한 CLI가 없다면 Windows 패키지 관리자로 설치할 수 있습니다. 이미 설치돼 있다면 건너뛰세요.
-
-```powershell
-winget install --id Microsoft.PowerShell --exact --source winget
-winget install --id Git.Git --exact --source winget
-winget install --id GitHub.cli --exact --source winget
-```
-
-설치 후 **새 PowerShell 7 창**을 열고 아래 명령을 순서대로 실행합니다. 비공개 저장소 접근이 필요하고 아직 로그인하지 않았다면 먼저 `gh auth login`을 실행하세요. 각 단계가 성공했는지 확인하고 다음 단계로 넘어갑니다.
+현재 저장소의 앱을 컴파일하려면 Git, **PowerShell 7**, 인터넷이 필요합니다. 다음 예제는 GitHub CLI도 사용합니다. 비공개 저장소 접근 권한이 있고 필요하다면 먼저 `gh auth login`으로 로그인하세요. 일반 사용자는 이 과정을 할 필요가 없습니다.
 
 ```powershell
 gh repo clone mobsweeper/FK_YT
 Set-Location FK_YT
-
-pwsh -NoProfile -File .\scripts\Bootstrap.ps1
-pwsh -NoProfile -File .\scripts\Bootstrap-Ffmpeg.ps1
+pwsh -NoProfile -File .\scripts\Bootstrap.ps1 -Component Dotnet
 pwsh -NoProfile -File .\scripts\Build.ps1
-pwsh -NoProfile -File .\scripts\Publish.ps1
-
-& .\dist\FK_YT\FK_YT.exe
 ```
 
-`Bootstrap.ps1`은 잠금 파일 기준으로 프로젝트 안의 `tools/`와 `runtime/`를 준비합니다. FFmpeg는 별도 스크립트로 준비합니다. `Publish.ps1`은 로컬 `dist/FK_YT/`에 런타임 포함 실행 폴더를 만들며, **GitHub 릴리스를 게시하거나 NSIS 설치 프로그램을 생성하지는 않습니다.** 출력 폴더가 이미 차 있으면 다른 출력 경로를 지정하거나 기존 결과를 별도로 보관하세요.
+이 명령은 프로젝트 내부에 SDK를 준비하고 앱을 빌드합니다. 실행용 외부 도구를 전부 준비하는 명령은 아닙니다. `Bootstrap.ps1`의 전체 실행과 `Bootstrap-Ffmpeg.ps1`은 **예전 공급사 mpv·FFmpeg**를 준비하므로 최종 clean 런타임 복원용으로 사용하면 안 됩니다. `Publish.ps1`은 준비된 개발용 런타임으로 새 `dist/` 하위 폴더에 self-contained 실행 폴더를 만들지만, 최종 clean 패키지·NSIS 설치기·GitHub 릴리스를 만들지는 않습니다.
 
-현재 GitHub 구성에는 C# 테스트 프로젝트 폴더가 없으므로 `Build.ps1 -Test`는 사용하지 않습니다. 의존성 URL이나 해시 검증이 실패하면 해당 오류를 확인하세요. 검증을 꺼서 진행하는 방식은 안내하지 않습니다.
+최종 앱 재빌드는 `1.0 source.zip`의 `release-1.0/BUILDING.txt`, 설치기 제작은 별도 `FK_YT-1.0-installer-source.zip`의 `docs/BUILDING.md`를 따릅니다. 설치기 소스는 이 저장소에 들어 있지 않습니다. 이 ZIP들도 아직 공개되지 않았습니다.
 
-공식 설치 안내: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
+현재 저장소에는 C# 테스트 프로젝트가 없으므로 `Build.ps1 -Test`를 안내하지 않습니다. 이번 문서 점검에서는 빌드를 다시 실행하지 않았으며, 명령·스크립트와 참조 파일의 존재를 확인했습니다. 다운로드·해시 검증 실패를 검증 해제로 넘기지 마세요.
+
+도구 설치 안내: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
 
 ## 7. 기본 사용법
 
@@ -178,17 +195,20 @@ pwsh -NoProfile -File .\scripts\Publish.ps1
 ## 8. 프로젝트 구조
 
 ```text
-src/                    C# WPF 앱, 플레이어 제어, 계정·저장 서비스
-worker/                 Python 목록·계정·메타데이터 작업자와 관련 테스트
-scripts/                의존 도구 준비, 빌드, 로컬 배포 스크립트
-dependencies.lock.json  외부 도구 버전·다운로드 주소·검증 해시
-.gitignore              개인 데이터·런타임·빌드 결과의 추적 제외
-LICENSE                 FK_YT 자체 코드·문서의 MIT 라이선스
+README.md               저장소 첫 화면, 언어별 안내 링크
 readme_KR.md            한국어 안내
 readme_EN.md            English guide
+assets/screenshots/    계정 정보를 가린 README 스크린샷
+docs/RELEASE-1.0.md     배포 파일·해시·대응 소스·검증 범위
+src/                    C# WPF 앱, 플레이어 제어, 계정·저장 서비스
+worker/                 Python 작업자와 관련 테스트
+scripts/                개발용 의존 도구 준비·빌드·로컬 Publish
+dependencies.lock.json  개발 도구와 과거 공급사 런타임의 잠금 정보
+SHA256SUMS.txt          현재 설치 EXE·포터블 ZIP 두 파일의 해시
+LICENSE                 FK_YT 자체 코드·문서의 MIT 라이선스
 ```
 
-`tools/`, `runtime/`, `dist/`, `data/`는 빌드·실행 과정에서 생기는 로컬 폴더입니다. GitHub에 실행 파일이나 로그인 데이터를 함께 올리는 구조가 아닙니다.
+`tools/`, `runtime/`, `dist/`, `data/`는 로컬 빌드·실행 과정에서 생기는 폴더입니다. 설치기 소스는 별도 `FK_YT-1.0-installer-source.zip`으로 준비되어 있으며, 이 저장소에는 없습니다. 사용자 데이터나 개인백업은 배포 파일에 포함하지 않습니다.
 
 ## 9. 제한 사항
 
@@ -215,24 +235,28 @@ FK_YT는 YouTube/Google의 공식 앱이 아니며 승인·제휴 관계가 없�
 
 근데 제작자는 그게 뭔지 모를 거 같습니다.
 
-사용하는 프로젝트와 고지 확인 위치는 다음과 같습니다. 최종 배포 파일은 실제 포함한 버전·빌드에 해당하는 라이선스와 고지를 보존해야 합니다.
+아래 경로는 **설치 또는 압축 해제한 앱 폴더 기준**입니다. 전체 구성 요소·저작권·라이선스 전문은 `THIRD-PARTY-NOTICES.txt`, `notices/`, 각 런타임 폴더에 보존했습니다. 이 표는 그 원문을 대신하지 않습니다.
 
-| 프로젝트 | 용도 / 확인 위치 |
+| 실제 포함 구성 요소 | 적용 라이선스 요약 / 고지 위치 |
 | --- | --- |
-| [.NET / WPF](https://github.com/dotnet/wpf) | 앱 프레임워크. SDK·런타임의 `LICENSE.txt`, `ThirdPartyNotices.txt` 확인 |
-| [Python](https://www.python.org/doc/copyright/) | Python 런타임 및 포함 구성 요소의 라이선스 |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp#license) / [yt-dlp-ejs](https://github.com/yt-dlp/ejs) | 소스·패키지·번들 EXE의 라이선스와 `THIRD_PARTY_LICENSES.txt` 확인 |
-| [Deno](https://github.com/denoland/deno) | JavaScript 런타임의 라이선스 및 고지 |
-| [mpv](https://github.com/mpv-player/mpv/blob/master/Copyright) | GPL/LGPL 적용은 실제 빌드 구성 확인 필요 |
-| [FFmpeg](https://ffmpeg.org/legal.html) | 포함 기능·라이브러리에 따른 GPL/LGPL 조건 확인 필요 |
-| [Microsoft.Data.Sqlite](https://github.com/dotnet/efcore) / [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | 사용한 NuGet 패키지의 라이선스·고지·메타데이터 확인 |
-| [7-Zip](https://www.7-zip.org/license.txt) | 개발용 압축 해제 도구. 포함하거나 재배포할 때 해당 조건 확인 |
-| [Return YouTube Dislike](https://returnyoutubedislike.com/) | 싫어요 추정치 제공 서비스. FK_YT 자체 통계가 아님 |
-| [NSIS](https://nsis.sourceforge.io/License) | 예정된 설치 프로그램 제작 도구. 실제 사용한 압축 모듈·플러그인도 함께 확인 |
+| .NET / WPF, Microsoft.Data.Sqlite | MIT 및 포함 구성 요소·Microsoft 배포 조건; `notices/dotnet/`, `notices/nuget/` |
+| SQLitePCLRaw / SQLite | Apache-2.0 / public domain; `notices/nuget/` |
+| Python | PSF 및 역사적·포함 라이브러리 조건; `runtime/python/LICENSE.txt`, `notices/python/` |
+| yt-dlp Python 패키지 / EXE | 패키지는 Unlicense, PyInstaller EXE 결합 배포물은 GPLv3-or-later; `runtime/yt-dlp/`의 `LICENSE`, `THIRD_PARTY_LICENSES.txt`, `SOURCE-AND-LICENSE.txt`, `notices/` |
+| yt-dlp-ejs / Meriyah / astring | Unlicense / ISC / MIT; `runtime/python/Lib/site-packages/yt_dlp_ejs/yt/solver/`의 원문 고지 |
+| Deno와 포함 구성 요소 | MIT 및 구성 요소별 조건; `runtime/deno/LICENSE.md`, `notices/deno/`. MPL 대상 소스는 `notices/deno/third-party/sources/mpl/`에 포함 |
+| mpv / FFmpeg와 연결 라이브러리 | GPLv2-or-later mpv 코어와 GPLv3 활성화 FFmpeg를 결합한 배포는 GPLv3-or-later 및 라이브러리별 조건; `notices/media/`의 전문·빌드/소스 인덱스 |
+| NSIS / MUI2 / zlib / 플러그인 | 주로 zlib/libpng; 실제 사용한 `System`, `nsExec`, `nsDialogs`와 SystemCall의 MIT 예외 원문 포함. **설치형에 추가된** `notices/installer/nsis/` |
 
-yt-dlp의 소스 라이선스와 번들 실행 파일의 조건은 같다고 가정하면 안 됩니다. 프로젝트의 [배포 파일 라이선스 설명](https://github.com/yt-dlp/yt-dlp#licensing)은 PyInstaller 번들에 GPLv3+ 코드가 포함될 수 있음을 안내합니다. mpv와 FFmpeg도 단순히 “전부 MIT”로 묶을 수 없습니다.
+yt-dlp 소스와 번들 EXE의 구분은 [프로젝트의 라이선스 설명](https://github.com/yt-dlp/yt-dlp#licensing), NSIS 구성 요소별 조건은 [NSIS 라이선스 안내](https://nsis.sourceforge.io/License)에서도 확인할 수 있습니다. 7zr는 빌드 전용이며 사용자용 배포본에는 없습니다. RYD는 외부 서비스이며 서버 소프트웨어를 번들로 배포하는 것이 아닙니다.
 
-빌드 스크립트에는 외부 도구의 고지를 확인·복사하는 처리가 있습니다. **고지 파일을 넣는 것만으로 모든 재배포 의무가 충족된다고 보장하지 않습니다.** 설치형·포터블 릴리스 전에는 해당 바이너리의 라이선스 전문, 필요한 대응 소스 및 제공 방식, 빌드 구성과 NSIS 구성 요소까지 확인해야 합니다. 이 라이선스 점검은 아직 최종 완료로 표시하지 않습니다.
+최종 mpv는 원본 커밋에 빌드 식별용 버전 메타데이터 변경을 적용해 FK_YT에서 만든 바이너리입니다. FFmpeg는 MSYS2 UCRT64 빌드와 해당 의존 라이브러리 묶음입니다. 예전 Bootstrap의 shinchiro/Gyan 바이너리와 같다고 표시하지 않습니다. 원본과 수정 부분의 고지·빌드 지침을 함께 보존했습니다.
+
+대응 소스는 **FK_YT에서 준비한 모음**인 `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, `FK_YT_mpv-FFmpeg-part2.zip`으로 제공할 준비가 되어 있습니다. 각 프로젝트가 직접 배포한 공식 ZIP이라는 뜻은 아닙니다. 미디어 두 파일은 분할 압축 볼륨이 아닌 **독립 ZIP**이므로 둘 다 받아 **같은 폴더에 part1 → part2 순서로** 풉니다. 앱 실행에는 이 소스 ZIP이 필요하지 않습니다.
+
+현재 대응 소스는 비공개 드래프트에만 첨부되어 있습니다. 공개 바이너리와 같은 접근 권한으로 받을 수 있는 실제 주소는 아직 검증하지 않았습니다. [배포 안내](docs/RELEASE-1.0.md)에 현재 파일명·해시·이전 고지와의 대응 관계, 게시 후 받는 명령을 적었습니다. 기존 고지는 보존하고 설치형의 `INSTALLER-SOURCE-ACCESS.txt`로 새 이름·해시를 보완했습니다.
+
+번들 고지·실제 바이너리 구성·소스 파일 해시의 대조는 완료했습니다. **전체 바이너리의 동일 바이트 재빌드, 일부 의존성의 과거 잠금 파일 완전 복원, 공개 소스 접근 검증은 완료하지 않았습니다.** 소스 묶음의 일부 보조 링크도 정정이 필요합니다. 고지 원문을 넣었다는 것만으로 모든 법적 문제가 없다고 보장하지 않으며, 공개 전 남은 작업은 배포 안내에 구분했습니다.
 
 ## 12. 기타
 

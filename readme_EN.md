@@ -13,8 +13,8 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 *Account details and selected thumbnails are blurred. Videos and artwork shown belong to their respective rights holders.*
 
-> **README draft · October 16, 2026**
-> This repository currently contains source only. An NSIS installer EXE and a portable ZIP are planned; no release has been published yet. Installer filenames, the NSIS version, and installation/uninstallation behavior will be documented when packaging is finalized.
+> **1.0 distribution status · checked October 16, 2026**
+> The installer EXE and portable ZIP have been built and locally checked within the scope below. The repository is **private** and `v1.0` is a **draft**; there is no public release available to general users yet. The draft currently contains only three third-party corresponding-source archives and their checksum file. See the [artifact list, hashes, and remaining publication work](docs/RELEASE-1.0.md).
 
 ## 1. Language
 
@@ -75,76 +75,93 @@ There are security limits. Tools may need temporary plaintext cookie files, and 
 
 ## 5. Requirements and versions
 
-- Target: **Windows 10 / Windows 11, x64**.
-- Actual usage testing: **Windows 10 22H2 only**. Equivalent behavior on Windows 11 has not yet been verified.
-- Account connection: Firefox or a Netscape-format cookie file you supply. Search and some playback also work without signing in.
-- Source builds: **PowerShell 7**, Git, and internet access. The CLI examples below also use GitHub CLI.
-- Distributions are intended to include the .NET runtime and the required helper programs. A source ZIP is not a ready-to-run application.
+- Installer acceptance floor: **Windows 10 22H2, build 19045 or later, x64 (AMD64)**. Windows 11 x64 is also a target. x86 and ARM64 are not accepted. This does not mean every Windows 10 version is supported.
+- Installation, launch, update, and default uninstall were tested on **Windows 10 Pro 22H2 x64, build 19045.6456**. This PC has development tools; a clean Windows 11 standard-user environment has not been tested.
+- Installer acceptance is separate from vendor support. The tested Windows 10 Pro 22H2 system is not presented as an officially supported .NET 10 environment. Check editions and lifecycle status in the [.NET 10 supported OS table](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
+- Users **do not need to install .NET, Python, Deno, mpv, FFmpeg, or an SDK separately**. The required runtimes and tools are included in the app folder. Setup uses Windows' built-in 64-bit PowerShell.
+- Account connection uses Firefox or a Netscape-format cookie file you supply. Search and some playback also work without signing in.
 
-Versions below come from the current [dependency lock](dependencies.lock.json) and project files. They will be updated if the final 1.0 installer contains different builds.
+These are the actual components in the final clean portable package and the installer that preserves it. The historical [dependency lock](dependencies.lock.json) alone does not describe the final media binaries.
 
-| Component | Version | Purpose |
+| Bundled component | Version / build | Purpose |
 | --- | --- | --- |
-| .NET SDK | 10.0.402 | Build the `net10.0-windows` WPF app |
-| Python | 3.13.16, embedded x64 | Feed/account workers |
-| yt-dlp EXE / Python package | 2026.08.19 / 2026.8.19 | Extraction, metadata, downloads |
-| yt-dlp-ejs | 0.8.0 | yt-dlp JavaScript support |
-| Deno | 2.9.7 | JavaScript runtime |
-| mpv | 20261014 / `ec38361c56` build | Playback |
-| FFmpeg / ffprobe | 9.0.2 | Media processing |
-| 7zr | 26.04 | Unpack build/runtime dependencies |
-| Microsoft.Data.Sqlite | 10.0.13 | Local database |
-| SQLitePCLRaw.bundle_e_sqlite3 | 3.0.5 | Native SQLite integration |
-| NSIS | Not yet selected | Planned installer builder |
+| .NET / Windows Desktop Runtime | Both **10.0.13**, self-contained win-x64 | Run the WPF app |
+| Python | **3.13.16**, embedded x64 | Feed/account workers |
+| yt-dlp EXE / Python package | **2026.08.19 / 2026.8.19** | Extraction, metadata, downloads |
+| Python inside yt-dlp EXE | **3.10.11** | Separate from the worker's Python |
+| yt-dlp-ejs | **0.8.0** | JavaScript support |
+| Deno | **2.9.7** | JavaScript runtime |
+| mpv | **0.41.0-dev-gec38361c56-fkyt** | Playback; build prepared by FK_YT |
+| FFmpeg / ffprobe | **9.0.2**, MSYS2 UCRT64 `9.0.2-1` | GPLv3-enabled shared-library build |
+| Microsoft.Data.Sqlite / SQLitePCLRaw | **10.0.13 / 3.0.5** | Local database |
+| Native SQLite package | **3.53.4** | Separate from Python's included SQLite |
+
+Build-only tools are **.NET SDK 10.0.402**, **7zr 26.04** for extraction, and **NSIS 3.13** for installer creation. The SDK, compiler, and 7zr are not installed into the user application folder. Setup uses NSIS **Unicode / Modern UI 2 (MUI2), English only, and zlib compression**. The NSIS x86 Unicode engine installs the x64 app payload.
 
 ## 6. Installation and launch
 
-### For users: release downloads — planned
+### For users: which file should I get?
 
-An installer EXE and a portable ZIP are planned for [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases). **There are no releases at the time of this draft.** GitHub's `Code → Download ZIP` downloads source, not an installer.
+Normally, choose **`FK_YT-1.0-Setup-x64.exe`**. Choose **`1.0 portable.zip`** if you prefer an extracted folder without installation. Both files have been built locally but **neither has been attached or published on GitHub yet**. Once published, look for them under `v1.0` on [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases). `Code → Download ZIP` and `1.0 source.zip` are developer source downloads.
 
-- **NSIS installer EXE:** Planned. Installation location, shortcuts, updating, and what happens to user data during removal will be documented after the installer is implemented.
-- **Portable ZIP:** Once published, extract the entire ZIP into a new writable folder and launch `FK_YT.exe`. Keep `runtime/`, `worker/`, DLLs, and license notices with it.
-- In the current portable layout, app data lives in `data/`. Close the app and keep an original backup before moving it. Moving to another PC or Windows account may require reconnecting the sign-in session.
+| Detail | Installer EXE | Portable ZIP |
+| --- | --- | --- |
+| First launch | Run Setup → follow its English pages → use `Launch FK_YT` or the FK_YT Start Menu entry | Extract the **whole** ZIP into a new folder → run `FK_YT.exe` inside `FK_YT` |
+| Default location | `%LOCALAPPDATA%\Programs\FK_YT` | A writable folder you choose |
+| Administrator rights | Not required; installs for the current Windows user | Not required in a writable location |
+| Shortcuts | Start Menu; optional Desktop shortcut, off by default | None created automatically |
+| Data | `%LOCALAPPDATA%\Programs\FK_YT\data`, or `<installation folder>\data` for a custom location | `<extracted FK_YT folder>\data` |
+| Removal | Windows app removal or `Uninstall.exe` in the installation folder | Close the app and delete its folder; deleting `data` also deletes your app data |
 
-If you have GitHub CLI, these commands can download EXE assets **after a release is published**. They currently fail because no release exists. They download files; they do not automatically execute an installer.
+Setup accepts an empty folder or an existing installation it owns. Do not install directly over a portable folder. The installation root must be at most 100 characters long. Keep `runtime/`, `worker/`, DLLs, and license notices intact.
+
+**Installation itself works offline.** Setup does not download additional runtimes. YouTube browsing, streaming, comments, downloads, and RYD count queries need internet access. The app's English/Korean/Japanese selection is separate from the English installer and does not change account or region settings.
+
+### Updates and data
+
+- **Installed version:** Close FK_YT, run the newer installer, and select the **existing installation location**. Settings, sign-in information, history, resume positions, and files you added are preserved. Updating may be refused while the app is running. There is no automatic online updater.
+- **Portable version:** Close the app and keep the old folder as a backup. Extract the new ZIP into a separate empty folder, copy your preserved `data/` into the new `FK_YT/` folder, then launch it. When moving to the installed version, finish installation first and copy data while the app is closed.
+- Sign-in data is tied to the Windows user. Moving to a different PC or Windows account may require reconnecting the session.
+
+### What happens when I uninstall?
+
+Use Windows **Settings → Apps → FK_YT → Uninstall**, or run `Uninstall.exe`. By default, **settings, sign-in information, watch history, and resume positions are kept**. The `data/` folder is deleted only if you select `Also permanently delete this installation's data folder` and accept the additional confirmation. Added or modified files may remain. Downloads stored outside the app folder are separate.
+
+After a default uninstall, the folder containing retained `data/` is not automatically treated as an owned installation. To reinstall, preserve that data separately, install into an empty folder, close the app, and restore `data/`.
+
+### File verification and download commands
+
+The final installer EXE is **unsigned (`NotSigned`)**. SmartScreen behavior after a real distribution download has not been tested, so no specific warning or wording is claimed. [SHA256SUMS.txt](SHA256SUMS.txt) covers the current installer EXE and portable ZIP. Compare it with `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.0-Setup-x64.exe'` in PowerShell. A checksum verifies matching bytes; it does not replace a code signature.
+
+Use these commands **only after `v1.0` is published with the named assets attached**. The current private draft has neither the EXE nor the portable asset, so these are not working public download instructions today.
 
 ```powershell
-gh release view --repo mobsweeper/FK_YT
-gh release download --repo mobsweeper/FK_YT --pattern '*.exe' --dir .\FK_YT-download
+gh release view v1.0 --repo mobsweeper/FK_YT
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
+# For the portable version, use this instead of the EXE download:
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --dir .\FK_YT-download
 ```
 
-While the repository is private, you need repository access and GitHub authentication. [GitHub CLI download reference](https://cli.github.com/manual/gh_release_download)
+### For developers: repository builds and the final release differ
 
-### For developers: build from source
+**The GitHub application source is not identical to the final clean release source.** It still contains diagnostic entry points and files removed from clean. The final application source is `1.0 source.zip`; see [source differences and build boundaries](docs/RELEASE-1.0.md#source-and-build-boundaries). This documentation update does not synchronize the code.
 
-If needed, install the command-line prerequisites through Windows Package Manager. Skip tools you already have.
-
-```powershell
-winget install --id Microsoft.PowerShell --exact --source winget
-winget install --id Git.Git --exact --source winget
-winget install --id GitHub.cli --exact --source winget
-```
-
-Open a **new PowerShell 7 window** after installation. If you need access to the private repository and have not authenticated, run `gh auth login` first. Run the following steps in order, checking that each succeeds before continuing.
+Compiling the current repository requires Git, **PowerShell 7**, and internet access. This example also uses GitHub CLI. If you have access to the private repository, authenticate with `gh auth login` when needed. Ordinary users do not need to build anything.
 
 ```powershell
 gh repo clone mobsweeper/FK_YT
 Set-Location FK_YT
-
-pwsh -NoProfile -File .\scripts\Bootstrap.ps1
-pwsh -NoProfile -File .\scripts\Bootstrap-Ffmpeg.ps1
+pwsh -NoProfile -File .\scripts\Bootstrap.ps1 -Component Dotnet
 pwsh -NoProfile -File .\scripts\Build.ps1
-pwsh -NoProfile -File .\scripts\Publish.ps1
-
-& .\dist\FK_YT\FK_YT.exe
 ```
 
-`Bootstrap.ps1` prepares project-local `tools/` and `runtime/` using the dependency lock. FFmpeg has a separate bootstrap script. `Publish.ps1` produces a self-contained application directory at `dist/FK_YT/`; **it does not publish a GitHub release or generate an NSIS installer.** If the output directory is already populated, choose a different output path or preserve the existing output elsewhere.
+This prepares a project-local SDK and builds the app; it does not prepare all external playback tools. Full `Bootstrap.ps1` and `Bootstrap-Ffmpeg.ps1` prepare **historical supplier mpv/FFmpeg builds**, so they must not be used to restore the final clean runtime. `Publish.ps1` packages a prepared development runtime into a new self-contained directory beneath `dist/`; it does not create the final clean package, an NSIS installer, or a GitHub release.
 
-This GitHub snapshot does not contain the C# test-project directory, so do not use `Build.ps1 -Test` here. If a dependency URL or hash check fails, investigate the error instead of disabling verification.
+For the final app, use `release-1.0/BUILDING.txt` inside `1.0 source.zip`. Installer creation is separate: use `docs/BUILDING.md` inside `FK_YT-1.0-installer-source.zip`. Installer sources are not in this repository. These ZIPs have not been publicly released yet either.
 
-Official setup references: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
+The repository has no C# test project, so `Build.ps1 -Test` is not an available instruction here. This documentation pass checked scripts and referenced files without rerunning builds. Investigate download/hash failures rather than disabling verification.
+
+Tool setup: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
 
 ## 7. Basic usage
 
@@ -178,17 +195,20 @@ See [Mozilla's profile-management guide](https://support.mozilla.org/en-US/kb/pr
 ## 8. Project layout
 
 ```text
-src/                    C# WPF app, player control, account and storage services
-worker/                 Python feed/account/metadata workers and related tests
-scripts/                Dependency bootstrap, build, and local publishing scripts
-dependencies.lock.json  Tool versions, download locations, verification hashes
-.gitignore              Excludes private data, runtimes, and build outputs
-LICENSE                 MIT license for FK_YT's own code and documentation
+README.md               Repository landing page and language links
 readme_KR.md            Korean guide
 readme_EN.md            English guide
+assets/screenshots/    README screenshots with account details blurred
+docs/RELEASE-1.0.md     Artifacts, hashes, source access, validation scope
+src/                    C# WPF app, player, account and storage services
+worker/                 Python workers and related tests
+scripts/                Development bootstrap, build, and local Publish
+dependencies.lock.json  Development tools and historical supplier runtime pins
+SHA256SUMS.txt          Current installer EXE and portable ZIP checksums
+LICENSE                 MIT license for FK_YT's own code and documentation
 ```
 
-`tools/`, `runtime/`, `dist/`, and `data/` are local build/runtime directories. Application binaries and sign-in data are not part of the source upload.
+`tools/`, `runtime/`, `dist/`, and `data/` are local build/runtime folders. Installer sources are prepared separately in `FK_YT-1.0-installer-source.zip`, not in this repository. User data and personal backups are excluded from release files.
 
 ## 9. Limitations
 
@@ -215,24 +235,28 @@ Review the terms and your rights to the content before use. A dedicated Firefox 
 
 MIT it is. The author probably couldn't tell you what that means, though.
 
-The following projects are used. Final distributions must retain the licenses and notices appropriate to the actual versions and builds included.
+Paths below are relative to the **installed or extracted app folder**. Full component, copyright, and license information is retained in `THIRD-PARTY-NOTICES.txt`, `notices/`, and each runtime directory. This table does not replace those texts.
 
-| Project | Purpose / license information |
+| Included component | License summary / notice location |
 | --- | --- |
-| [.NET / WPF](https://github.com/dotnet/wpf) | App framework; inspect SDK/runtime `LICENSE.txt` and `ThirdPartyNotices.txt` |
-| [Python](https://www.python.org/doc/copyright/) | Runtime and included components |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp#license) / [yt-dlp-ejs](https://github.com/yt-dlp/ejs) | Inspect source/package/bundled-EXE licensing and `THIRD_PARTY_LICENSES.txt` |
-| [Deno](https://github.com/denoland/deno) | JavaScript runtime licenses and notices |
-| [mpv](https://github.com/mpv-player/mpv/blob/master/Copyright) | GPL/LGPL applicability depends on the actual build |
-| [FFmpeg](https://ffmpeg.org/legal.html) | Check GPL/LGPL conditions for the included features and libraries |
-| [Microsoft.Data.Sqlite](https://github.com/dotnet/efcore) / [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | Inspect the actual NuGet packages' licenses, notices, and metadata |
-| [7-Zip](https://www.7-zip.org/license.txt) | Build-time extraction tool; check its terms if included or redistributed |
-| [Return YouTube Dislike](https://returnyoutubedislike.com/) | External dislike-estimate service, not statistics collected by FK_YT |
-| [NSIS](https://nsis.sourceforge.io/License) | Planned installer builder; also check the compression modules and plugins actually used |
+| .NET / WPF, Microsoft.Data.Sqlite | MIT plus included component and Microsoft distribution terms; `notices/dotnet/`, `notices/nuget/` |
+| SQLitePCLRaw / SQLite | Apache-2.0 / public domain; `notices/nuget/` |
+| Python | PSF plus historical and included-library terms; `runtime/python/LICENSE.txt`, `notices/python/` |
+| yt-dlp Python package / EXE | Package: Unlicense; combined PyInstaller EXE: GPLv3-or-later. See `LICENSE`, `THIRD_PARTY_LICENSES.txt`, `SOURCE-AND-LICENSE.txt`, and `notices/` under `runtime/yt-dlp/` |
+| yt-dlp-ejs / Meriyah / astring | Unlicense / ISC / MIT; original notices in `runtime/python/Lib/site-packages/yt_dlp_ejs/yt/solver/` |
+| Deno and its components | MIT plus component terms; `runtime/deno/LICENSE.md`, `notices/deno/`. MPL component sources are included in `notices/deno/third-party/sources/mpl/` |
+| mpv / FFmpeg and linked libraries | GPLv2-or-later mpv core combined with GPLv3-enabled FFmpeg: GPLv3-or-later distribution plus library terms. Full texts and build/source index in `notices/media/` |
+| NSIS / MUI2 / zlib / plugins | Primarily zlib/libpng; original notices for the used `System`, `nsExec`, `nsDialogs`, and SystemCall MIT exception are retained. Added by the **installer only** under `notices/installer/nsis/` |
 
-Do not assume yt-dlp's source and bundled executable have identical licensing. Its [release-file licensing notes](https://github.com/yt-dlp/yt-dlp#licensing) explain the GPLv3+ code in PyInstaller bundles. mpv and FFmpeg cannot simply be labeled "all MIT" either.
+See [yt-dlp's licensing explanation](https://github.com/yt-dlp/yt-dlp#licensing) for the source/EXE distinction and the [NSIS license page](https://nsis.sourceforge.io/License) for its component terms. 7zr is a build-only tool, absent from the user distribution. RYD is an external service; its server software is not bundled.
 
-The build scripts check and copy dependency notices. **Including notices alone is not a guarantee that every redistribution obligation is satisfied.** Before publishing installer or portable binaries, review their license texts, any corresponding-source obligations and delivery method, actual build configurations, and NSIS components. That release licensing review is not marked complete.
+The final mpv binary was built by FK_YT from the upstream commit with a build-identifying version-metadata change. FFmpeg is the MSYS2 UCRT64 build and its dependency cohort. These are not the historical shinchiro/Gyan binaries acquired by Bootstrap. Original and modification notices and build instructions are retained.
+
+Corresponding source is prepared in **collections assembled by FK_YT**: `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, and `FK_YT_mpv-FFmpeg-part2.zip`. These collections are not official ZIP releases made by the upstream projects. The media files are **independent ZIPs**, not split volumes: get both and extract part1, then part2, into the **same folder**. Users do not need these source ZIPs to run the app.
+
+These source assets are currently attached only to a private draft. An actual public source location with access equal to the binaries has not been verified. The [distribution guide](docs/RELEASE-1.0.md) lists current filenames, hashes, legacy-notice mappings, and commands for use after publication. Original notices are preserved; the installer's `INSTALLER-SOURCE-ACCESS.txt` adds the current names and hashes.
+
+Bundled notices, actual binary configuration, and source-asset hashes have been cross-checked. **A complete bit-for-bit rebuild, complete recovery of certain historical dependency locks, and public source-access validation are not complete.** Some supplementary source-document links also need correction. Retaining notices is not a guarantee that every legal issue is resolved; remaining publication work is listed separately in the distribution guide.
 
 ## 12. Miscellaneous
 
