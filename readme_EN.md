@@ -223,9 +223,9 @@ Do not assume yt-dlp's source and bundled executable have identical licensing. I
 
 The build scripts check and copy dependency notices. **Including notices alone is not a guarantee that every redistribution obligation is satisfied.** Before publishing installer or portable binaries, review their license texts, any corresponding-source obligations and delivery method, actual build configurations, and NSIS components. That release licensing review is not marked complete.
 
-## 12. Debugging count
+## 12. Miscellaneous
 
-| Item | Current count |
+| Item | Details |
 | --- | --- |
 | Writing the code | Delegated to AI |
 | Writing this README | Also delegated to AI |
