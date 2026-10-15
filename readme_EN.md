@@ -172,6 +172,7 @@ worker/                 Python feed/account/metadata workers and related tests
 scripts/                Dependency bootstrap, build, and local publishing scripts
 dependencies.lock.json  Tool versions, download locations, verification hashes
 .gitignore              Excludes private data, runtimes, and build outputs
+LICENSE                 MIT license for FK_YT's own code and documentation
 readme_KR.md            Korean guide
 readme_EN.md            English guide
 ```
@@ -199,7 +200,9 @@ Review the terms and your rights to the content before use. A dedicated Firefox 
 
 ## 11. Licensing and external projects
 
-**A distribution license for FK_YT itself has not yet been selected.** This draft does not assign MIT, GPL, or another license to the project, or grant rights on behalf of its dependencies.
+**FK_YT's own code and documentation are distributed under the [MIT License](LICENSE).** External projects retain their respective licenses.
+
+MIT it is. The author probably couldn't tell you what that means, though. lol
 
 The following projects are used. Final distributions must retain the licenses and notices appropriate to the actual versions and builds included.
 

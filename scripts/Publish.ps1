@@ -113,7 +113,7 @@ foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_sessio
     Assert-RegularPublishPath (Join-Path $projectRoot "worker/$workerFile")
     Copy-Item -LiteralPath (Join-Path $projectRoot "worker/$workerFile") -Destination $workerOutput
 }
-foreach ($document in @('README.md', 'VERIFICATION.md', 'TOOLCHAIN.md', 'CHANGES_AFTER_PROFILE.txt', 'worker/README.md')) {
+foreach ($document in @('LICENSE', 'README.md', 'VERIFICATION.md', 'TOOLCHAIN.md', 'CHANGES_AFTER_PROFILE.txt', 'worker/README.md')) {
     $documentPath = Join-Path $projectRoot $document
     if (Test-Path -LiteralPath $documentPath -PathType Leaf) {
         Assert-RegularPublishPath $documentPath
