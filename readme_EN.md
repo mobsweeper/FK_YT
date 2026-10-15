@@ -226,7 +226,9 @@ The build scripts check and copy dependency notices. **Including notices alone i
 | --- | --- |
 | Writing the code | Delegated to AI |
 | Writing this README | Also delegated to AI |
-| Debugging and reviews | Multiple rounds; no verified total yet |
+| Estimated debugging reviews delegated to agents | **About 165** |
 | Certified bug-free | Absolutely not |
 
-No made-up scoreboard pretending to be a certification. Lots of review does not mean every setup works. If totals are added later, review rounds, reviewing agents, and actual fixes will be counted separately.
+Based on **11 parallel review rounds × 15 review assignments**, checked on October 16, 2026. Repeat assignments to the same agents count; the main agent's own checks, separate external reviews, and individual follow-up questions do not. That's not 165 different AI models, and definitely not a claim of 165 bugs fixed. lol
+
+*This counts static code reviews only. Dynamic checks, including actual app execution and playback, could not be tallied.*
