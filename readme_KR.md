@@ -6,10 +6,10 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 ![영상 재생과 하단 조작 버튼, 다음 영상 목록이 표시된 FK_YT](assets/screenshots/playback-ko.png)
 
-| 시크릿 모드 | 설정·로그인 연결 |
-| :---: | :---: |
-| [![FK_YT 시크릿 모드 시작 화면](assets/screenshots/incognito-ko.png)](assets/screenshots/incognito-ko.png) | [![FK_YT 설정·로그인 연결 화면](assets/screenshots/settings-ko.png)](assets/screenshots/settings-ko.png) |
-| 로그인 쿠키를 사용하지 않고, 시청 기록과 이어보기 위치를 저장하지 않습니다. | 로그인 연결, 시청 기록 전송, 멤버십 영상 숨기기를 설정합니다. |
+| 홈 추천 | 시크릿 모드 | 설정·로그인 연결 |
+| :---: | :---: | :---: |
+| [![FK_YT 홈 추천 목록 로딩 화면](assets/screenshots/home-ko.png)](assets/screenshots/home-ko.png) | [![FK_YT 시크릿 모드 시작 화면](assets/screenshots/incognito-ko.png)](assets/screenshots/incognito-ko.png) | [![FK_YT 설정·로그인 연결 화면](assets/screenshots/settings-ko.png)](assets/screenshots/settings-ko.png) |
+| 홈 추천 목록을 불러오는 화면입니다. | 로그인 쿠키를 사용하지 않고, 시청 기록과 이어보기 위치를 저장하지 않습니다. | 로그인 연결, 시청 기록 전송, 멤버십 영상 숨기기를 설정합니다. |
 
 *계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
 

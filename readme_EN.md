@@ -6,10 +6,10 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 ![FK_YT playing a video, with playback controls and the next-video queue](assets/screenshots/playback-en.png)
 
-| Incognito mode | Settings and sign-in |
-| :---: | :---: |
-| [![FK_YT incognito start screen](assets/screenshots/incognito-en.png)](assets/screenshots/incognito-en.png) | [![FK_YT settings and sign-in screen](assets/screenshots/settings-en.png)](assets/screenshots/settings-en.png) |
-| Browse without using sign-in cookies or saving watch history and resume positions. | Connect a session and choose how watch history and members-only videos are handled. |
+| Home | Incognito mode | Settings and sign-in |
+| :---: | :---: | :---: |
+| [![FK_YT home screen while recommendations load](assets/screenshots/home-en.png)](assets/screenshots/home-en.png) | [![FK_YT incognito start screen](assets/screenshots/incognito-en.png)](assets/screenshots/incognito-en.png) | [![FK_YT settings and sign-in screen](assets/screenshots/settings-en.png)](assets/screenshots/settings-en.png) |
+| Home screen while recommendations load. | Browse without using sign-in cookies or saving watch history and resume positions. | Connect a session and choose how watch history and members-only videos are handled. |
 
 *Account details and selected thumbnails are blurred. Videos and artwork shown belong to their respective rights holders.*
 
