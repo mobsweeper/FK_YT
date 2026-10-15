@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -10,7 +9,6 @@ namespace FkYouTube.ProcessSupport;
 /// <summary>A redirected child created suspended and placed in its own kill-on-close job.</summary>
 public sealed class OwnedProcess : IDisposable
 {
-    private static readonly ConcurrentDictionary<OwnedProcess, byte> Registry = new();
     // A raw Windows handle can be reused immediately after close. Keep its read,
     // every native operation, and the final close in the same lifetime region.
     private readonly object _jobLifetime = new();
@@ -105,7 +103,6 @@ public sealed class OwnedProcess : IDisposable
             error = new StreamReader(TakeStream(ref stderrRead, FileAccess.Read), utf8, true);
             if (Native.ResumeThread(pi.Thread) == uint.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error());
             var owned = new OwnedProcess(process, job, input, output, error);
-            Registry.TryAdd(owned, 0);
             job = 0; process = null; input = null; output = null; error = null;
             return owned;
         }
@@ -173,18 +170,6 @@ public sealed class OwnedProcess : IDisposable
         }
     }
 
-    /// <summary>Best-effort snapshot of current processes in all app-owned jobs.</summary>
-    public static IReadOnlyList<int> GetAllOwnedProcessIds()
-    {
-        var ids = new HashSet<int>();
-        foreach (var owned in Registry.Keys)
-        {
-            try { foreach (var id in owned.GetProcessIds()) ids.Add(id); }
-            catch (Exception ex) when (ex is Win32Exception or ObjectDisposedException or InvalidOperationException) { }
-        }
-        return ids.Order().ToArray();
-    }
-
     /// <summary>Terminates only the process tree in this instance's job.</summary>
     public void Kill()
     {
@@ -201,7 +186,6 @@ public sealed class OwnedProcess : IDisposable
         {
             if (_disposed != 0) return;
             Volatile.Write(ref _disposed, 1);
-            Registry.TryRemove(this, out _);
             // Closing the non-inherited last job handle also terminates grandchildren.
             var job = _job; _job = 0;
             if (job != 0) Native.CloseHandle(job);

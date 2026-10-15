@@ -556,9 +556,6 @@ class FeedWorker:
                     or request.get("generation") != generation):
                 raise FeedError("unsupported")
             command = request.get("command")
-            if command == "ping":
-                yield {"type": "pong", **base}
-                return
             if command == "feed.close":
                 self.close()
                 yield {"type": "done", **base, "hasMore": False, "count": 0}

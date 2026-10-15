@@ -144,7 +144,7 @@ gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --
 
 ### For developers: repository builds and the final release differ
 
-**The GitHub application source is not identical to the final clean release source.** It still contains diagnostic entry points and files removed from clean. The final application source is `1.0 source.zip`; see [source differences and build boundaries](docs/RELEASE-1.0.md#source-and-build-boundaries). This documentation update does not synchronize the code.
+**The GitHub app and worker code now include the same diagnostic-code removal as the final clean release.** Demo/smoke entry points and diagnostic-only files are removed; normal error handling and process cleanup are retained. See the [comparison scope and remaining documentation/packaging differences](docs/RELEASE-1.0.md#source-and-build-boundaries) against `1.0 source.zip`. Matching application code does not make the historical Bootstrap workflow reproduce the final media binaries.
 
 Compiling the current repository requires Git, **PowerShell 7**, and internet access. This example also uses GitHub CLI. If you have access to the private repository, authenticate with `gh auth login` when needed. Ordinary users do not need to build anything.
 
@@ -159,7 +159,7 @@ This prepares a project-local SDK and builds the app; it does not prepare all ex
 
 For the final app, use `release-1.0/BUILDING.txt` inside `1.0 source.zip`. Installer creation is separate: use `docs/BUILDING.md` inside `FK_YT-1.0-installer-source.zip`. Installer sources are not in this repository. These ZIPs have not been publicly released yet either.
 
-The repository has no C# test project, so `Build.ps1 -Test` is not an available instruction here. This documentation pass checked scripts and referenced files without rerunning builds. Investigate download/hash failures rather than disabling verification.
+The repository has no C# test project, so `Build.ps1 -Test` is not an available instruction here. After diagnostic-code removal, a locked build using the existing SDK and local package cache passed with zero warnings/errors, and all 238 offline Python tests passed. Full Bootstrap downloads and actual app playback were not retested. Investigate download/hash failures rather than disabling verification.
 
 Tool setup: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
 

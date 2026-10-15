@@ -2,9 +2,9 @@
 
 Checked: **2026-10-16**. [한국어 사용 안내](../readme_KR.md) · [English user guide](../readme_EN.md)
 
-설치기·포터블 제작과 로컬 검증은 완료했지만 **공개 배포는 아직 하지 않았습니다.** 이 문서는 실제 파일과 검증 범위를 정리한 안내입니다. 이번 갱신은 저장소 문서만 변경하며, EXE·ZIP 내부 문서나 바이너리를 갱신하지 않습니다.
+설치기·포터블 제작과 로컬 검증은 완료했지만 **공개 배포는 아직 하지 않았습니다.** GitHub 앱·작업자 소스에도 clean과 같은 진단 코드 제거를 반영했습니다. 이 저장소 갱신으로 기존 EXE·ZIP 내부 문서나 바이너리를 바꾸지는 않았습니다.
 
-The installer and portable package are built and locally verified within the scope below. **They are not publicly released.** This update changes repository documentation only; it does not replace any EXE, ZIP, or document inside an archive.
+The installer and portable package are built and locally verified within the scope below. **They are not publicly released.** GitHub app/worker sources now include the clean release's diagnostic-code removal. This repository update does not replace any existing EXE, ZIP, or document inside an archive.
 
 ## Publication status
 
@@ -128,13 +128,13 @@ Provided source archives, notices and hashes were checked; this is not a legal c
 
 ## Source and build boundaries
 
-**The current GitHub application code is not the final clean application-source snapshot.** A path-by-path comparison found 74 shared files, 65 byte-identical and 9 different, plus files specific to each distribution. Counts exclude `.git`; repository introductions/screenshots are intentionally newer documentation and are preserved.
+**GitHub app/worker code is aligned with the clean application source in `1.0 source.zip`.** The diagnostic removal covers demo/smoke dispatch, fixture helpers and diagnostic process-ID reporting, plus the worker's ping/pong command and its two affected tests. Normal error handling, Job Object ownership and process cleanup remain. Newer repository introductions, screenshots and documentation are preserved.
 
-The meaningful code differences are diagnostic-path removal in `App.xaml.cs`, `MainWindow.xaml.cs`, `MainWindow.Interactions.cs`, `Playback/MpvPlayerService.cs`, `ProcessSupport/OwnedProcess.cs`, and `worker/feed_worker.py`, with two adjusted worker tests. GitHub also retains four diagnostic sources removed from clean: `MainWindow.FeatureVerification.cs`, `MainWindow.PlaybackVerification.cs`, `MainWindow.Verification.cs`, and `Playback/PlaybackSmoke.cs`. `scripts/Publish.ps1` differs in document-copy handling. No code synchronization is part of this documentation-only change.
+The four removed diagnostic sources are `MainWindow.FeatureVerification.cs`, `MainWindow.PlaybackVerification.cs`, `MainWindow.Verification.cs`, and `Playback/PlaybackSmoke.cs`. Developer unit tests remain separate from the application. The repository is still not a byte-for-byte copy of the entire source ZIP: `scripts/Publish.ps1` retains its repository-specific document-copy handling, and the source ZIP includes release materials absent from this checkout. These differences do not justify replacing the final runtime with historical Bootstrap downloads.
 
 | Operation | Actual source/tool | What it establishes |
 | --- | --- | --- |
-| Prepare SDK / compile repository | Existing `scripts/Bootstrap.ps1 -Component Dotnet`, then `scripts/Build.ps1` | Builds the repository's development snapshot, not proof of final clean parity |
+| Prepare SDK / compile repository | Existing `scripts/Bootstrap.ps1 -Component Dotnet`, then `scripts/Build.ps1` | Builds the aligned app source; does not recreate the full final runtime package |
 | Prepare historical runtime | Existing `scripts/Bootstrap.ps1` and `scripts/Bootstrap-Ffmpeg.ps1` | Acquires locked historical supplier binaries, not the final licensed media cohort |
 | Local development package | Existing `scripts/Publish.ps1` | Self-contained `win-x64` folder; fresh direct child of `dist/` required. Does not publish online or produce NSIS |
 | Clean app rebuild | `1.0 source.zip` → `release-1.0/BUILDING.txt` | Locked restore/publish of clean app; use a fresh matching portable extraction for runtime/notices |
@@ -151,13 +151,13 @@ python build_installer.py --portable 'inputs/1.0 portable.zip' --app-source 'inp
 
 Those `inputs/` files and the toolchain are prerequisites, not files already present in this Git checkout or the installer-source ZIP. The helper does not download them. Use the archive's guide for their pinned locations, and fresh staging/output for changed inputs. Compiling does not upload or publish a release.
 
-There is no C# test project in the current repository; `Build.ps1 -Test` must not be used as a working instruction here. Existing scripts and references were statically checked in this documentation pass, without a fresh developer build. The historical Publish script also does not copy the language guides/assets as a complete documentation bundle; its output is not the curated final user distribution.
+After diagnostic removal, all 68 shared `src/` and `worker/` files match the clean source ZIP byte-for-byte. A Release build using SDK 10.0.402, locked restore and the existing local NuGet cache passed with zero warnings/errors. All 238 offline Python tests passed. No application launch, online account request, or new media playback test was performed. There is no C# test project in the current repository; `Build.ps1 -Test` must not be used as a working instruction here. The historical Publish script also does not copy the language guides/assets as a complete documentation bundle; its output is not the curated final user distribution.
 
 ## Work still required before a public release
 
 공개 전에는 아래 실제 작업이 남아 있습니다. **이번 문서 커밋으로 EXE·ZIP이 바뀐 것은 아닙니다.**
 
-1. Decide whether to synchronize GitHub code to the exact clean source or keep the separate snapshot clearly identified. The clean source ZIP must be available with the final release; documentation alone cannot remove diagnostic code from the Git checkout.
+1. Include the clean source ZIP with the final release and keep the documented packaging/runtime distinctions intact. Diagnostic-code removal is now synchronized in GitHub app/worker code; this does not synchronize the historical media acquisition workflow.
 2. Correct broken supplementary source links and unresolved source/notice references without altering original legal texts. If source ZIP bytes change, regenerate their hashes and all dependent mappings/locks. Preserve and explicitly qualify remaining reconstruction/reproducibility limits.
 3. Prepare the real binary-and-source publication location. Update additive source-access guidance, user guides and input locks to that location; preserve original notices. Add the current source mapping to the portable documentation as well. These are **archive changes requiring repackaging**, not changes made by this commit.
 4. Rebuild the installer from the resulting verified portable/input set in a fresh stage; repackage installer source, regenerate output manifests and checksums, and repeat checks appropriate to the changed inputs. Existing hashes in this guide identify the current candidates only.
@@ -165,4 +165,4 @@ There is no C# test project in the current repository; `Build.ps1 -Test` must no
 6. Repository visibility and release publication require a separate authorized action. When published, verify unauthenticated access to both binaries and their matching sources on `v1.0`; then update the dated status in all READMEs. A successful authenticated draft inspection does not satisfy this check.
 7. Clean Windows 11 standard-user testing without a system SDK/.NET remains unperformed. Complete it or explicitly retain the limitation; do not turn the existing Windows 10 development-PC test into clean-machine proof. Keep signing/SmartScreen and untested runtime/power-loss limits separate as well.
 
-No repository visibility, release publication, installed application, user data, EXE, or ZIP is changed by this documentation update.
+No repository visibility, release publication, installed application, user data, existing EXE, or ZIP is changed by this source/documentation update.

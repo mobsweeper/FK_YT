@@ -6,8 +6,6 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using FkYouTube.Controls;
@@ -28,7 +26,6 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<VideoRow> _rows=[];
     private readonly List<VideoItem> _items=[];
     private readonly DispatcherTimer _saveTimer=new(){Interval=TimeSpan.FromSeconds(5)};
-    private readonly string[] _args;
     private readonly Stopwatch _clock=Stopwatch.StartNew();
     private AppSettings _settings;
     private CancellationTokenSource? _feedCts,_videoCts;
@@ -74,7 +71,7 @@ public partial class MainWindow : Window
     private string _source="home";
     private string _browseTitle="";
     private FeedNavigationMetadata? _feedNavigationMetadata;
-    private bool _loading,_hasMore,_ready,_closing,_seekDragging,_fullscreen,_playerStarted,_demo;
+    private bool _loading,_hasMore,_ready,_closing,_seekDragging,_fullscreen,_playerStarted;
     private int _accountBusyDepth;
     private bool AccountWorkBlocked=>_closing || _accountBusyDepth>0 || _store.HasSettingsLoadFailure;
     private bool _hasFeed,_feedExhausted;
@@ -92,9 +89,9 @@ public partial class MainWindow : Window
     private double? _pendingSeek;
     private double _pendingSeekAt;
 
-    public MainWindow(RuntimePaths paths,string[] args)
+    public MainWindow(RuntimePaths paths)
     {
-        _paths=paths;_args=args;_demo=args.Contains("--demo")||args.Contains("--ui-smoke-output")||args.Contains("--review-smoke-output")||args.Contains("--feature-smoke-output");
+        _paths=paths;
         _store=new(paths);_settings=_store.LoadSettings();InitializeUiLanguage();
         _browseTitle=UiText.T("홈 추천","Home recommendations","ホームのおすすめ");
         _session=new(paths);_feed=new(paths);_youtube=new(paths,_session);_player=new(paths);
@@ -112,7 +109,7 @@ public partial class MainWindow : Window
         SeekSlider.AddHandler(PreviewMouseLeftButtonUpEvent,new MouseButtonEventHandler(Seek_Up),true);
         SeekSlider.AddHandler(PreviewMouseMoveEvent,new MouseEventHandler(Seek_Move),true);
         ThumbnailImage.Cache=new(paths,privateMode:_settings.Incognito);VideoList.ItemsSource=_rows;NextList.ItemsSource=_upNext;RelatedList.ItemsSource=_relatedItems;
-        ProfileCombo.ItemsSource=_demo?Array.Empty<FirefoxProfile>():SessionService.ListFirefoxProfiles(out _profileListWarning);
+        ProfileCombo.ItemsSource=SessionService.ListFirefoxProfiles(out _profileListWarning);
         if(ProfileCombo.Items.Count>0)ProfileCombo.SelectedIndex=0;
         foreach(FirefoxProfile p in ProfileCombo.Items)if(p.Path==_settings.FirefoxProfile)ProfileCombo.SelectedItem=p;
         HistorySyncCheck.IsChecked=_settings.SyncHistory;PlaylistUrlBox.Text=_settings.PlaylistUrl;VolumeSlider.Value=_settings.Volume;
@@ -128,33 +125,7 @@ public partial class MainWindow : Window
     }
     private async void OnLoaded(object sender,RoutedEventArgs e)
     {
-        var upgradeSmoke=Array.IndexOf(_args,"--playback-upgrade-smoke-output");
-        if(upgradeSmoke>=0 && upgradeSmoke+1<_args.Length){await RunPlaybackUpgradeProbeAsync(_args[upgradeSmoke+1]);Close();return;}
-        var featureSmoke=Array.IndexOf(_args,"--feature-smoke-output");
-        if(featureSmoke>=0 && featureSmoke+1<_args.Length){await RunFeatureProbeAsync(_args[featureSmoke+1]);Close();return;}
-        var nativeFeatureSmoke=Array.IndexOf(_args,"--native-feature-smoke-output");
-        if(nativeFeatureSmoke>=0 && nativeFeatureSmoke+1<_args.Length){await RunNativeFeatureProbeAsync(_args[nativeFeatureSmoke+1]);Close();return;}
-        var channelSmoke=Array.IndexOf(_args,"--channel-smoke-output");
-        if(channelSmoke>=0 && channelSmoke+1<_args.Length){await RunChannelProbeAsync(_args[channelSmoke+1]);Close();return;}
-        var reviewSmoke=Array.IndexOf(_args,"--review-smoke-output");
-        if(reviewSmoke>=0 && reviewSmoke+1<_args.Length){Title="FK_YT · 오프라인 리뷰 회귀 검사";await RunReviewProbeAsync(_args[reviewSmoke+1]);Close();return;}
-        var seekSmoke=Array.IndexOf(_args,"--seek-smoke-output");
-        if(seekSmoke>=0 && seekSmoke+1<_args.Length){Title="FK_YT · 자동 재생바 검사";await RunSeekProbeAsync(_args[seekSmoke+1]);Close();return;}
-        var accountSmoke=Array.IndexOf(_args,"--account-playback-smoke-output");
-        if(accountSmoke>=0 && accountSmoke+1<_args.Length){await RunAccountPlaybackProbeAsync(_args[accountSmoke+1]);Close();return;}
-        var playbackSmoke=Array.IndexOf(_args,"--playback-smoke-output");
-        if(playbackSmoke>=0 && playbackSmoke+1<_args.Length)
-        {
-            Title="FK_YT · 자동 재생 검사";PlayingTitle.Text="자동 검사 중 · 일반 실행에서는 재생바로 이동할 수 있습니다.";PlayerPanel.IsEnabled=false;
-            ShowPanel("player");UpdateLayout();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.Loaded);
-            await PlaybackSmoke.RunAsync(_player,VideoHost.Handle,_args[playbackSmoke+1],CancellationToken.None);Close();return;
-        }
-        if(_demo)
-        {
-            ShowDemo();var smoke=Array.IndexOf(_args,"--ui-smoke-output");
-            if(smoke>=0 && smoke+1<_args.Length){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await CaptureSmokeAsync(_args[smoke+1]);Close();}
-        }
-        else if(_store.HasSettingsLoadFailure){ShowPanel("settings");SetStatus(_store.SettingsLoadFailureMessage!);}
+        if(_store.HasSettingsLoadFailure){ShowPanel("settings");SetStatus(_store.SettingsLoadFailureMessage!);}
         else if(_session.HasSessionRecoveryFailure){ShowPanel("settings");SetStatus(()=>UiText.T("이전 계정 변경이 완료되지 않았습니다. Firefox 연결 또는 쿠키 가져오기로 새로 연결하세요.","The previous account change was not completed. Reconnect through Firefox or cookie import.","前回のアカウント変更が完了していません。Firefox 接続または Cookie のインポートで再接続してください。"));}
         else if(_settings.Incognito)ShowIncognitoLanding();
         else if(_session.IsConnected){if(await ReloadChannelsAsync())await OpenFeedWithUiTitleAsync("home",()=>UiText.T("홈 추천","Home recommendations","ホームのおすすめ"));}
@@ -226,9 +197,9 @@ public partial class MainWindow : Window
         if(AccountWorkBlocked)return;
         _channelReloadError=null;
         _viewGeneration++;
-        if(!_demo && _settings.Incognito && (source is "home" or "shorts" or "subscriptions" or "playlists" or "watchlater" or "history"))
+        if(_settings.Incognito && (source is "home" or "shorts" or "subscriptions" or "playlists" or "watchlater" or "history"))
         {ShowPanel("browse");SetStatus(()=>UiText.T("시크릿 모드에서는 로그인 없이 검색·영상·공개 재생목록 주소를 이용하세요.","In incognito mode, use search, video URLs, or public playlist URLs without signing in.","シークレットモードでは、ログインせずに検索・動画 URL・公開再生リスト URL を利用してください。"));return;}
-        if(!_demo && (source is "home" or "shorts" or "subscriptions" or "playlists" or "watchlater" or "history") && !_session.IsConnected)
+        if((source is "home" or "shorts" or "subscriptions" or "playlists" or "watchlater" or "history") && !_session.IsConnected)
         {ShowPanel("settings");SetStatus(()=>UiText.T("이 목록을 보려면 먼저 로그인 세션을 연결하세요.","Connect a sign-in session first to view this list.","この一覧を表示するには、先にログインセッションを接続してください。"));return;}
         _feedCts?.Cancel();_feed.Stop();
         titleFactory??=source switch
@@ -247,7 +218,6 @@ public partial class MainWindow : Window
         ClearDisplayedItems();_loading=false;_hasMore=false;_hasFeed=true;_feedExhausted=false;
         WelcomePanel.Visibility=Visibility.Collapsed;HistoryActions.Visibility=source=="history"?Visibility.Visible:Visibility.Collapsed;
         MoreButton.Visibility=Visibility.Visible;ShowPanel("browse");
-        if(_demo){ShowDemo();return;}
         await FetchBatchAsync(true);
     }
     private Task FetchBatchAsync(bool open,string? filterId=null,int? previousGeneration=null)
@@ -329,7 +299,7 @@ public partial class MainWindow : Window
     }
     private async void Feed_ScrollChanged(object sender,ScrollChangedEventArgs e)
     {
-        if(_ready && !_demo && BrowsePanel.Visibility==Visibility.Visible && _hasMore && !_loading && e.VerticalChange>0 && e.ExtentHeight-e.ViewportHeight-e.VerticalOffset<1000)await FetchBatchAsync(false);
+        if(_ready && BrowsePanel.Visibility==Visibility.Visible && _hasMore && !_loading && e.VerticalChange>0 && e.ExtentHeight-e.ViewportHeight-e.VerticalOffset<1000)await FetchBatchAsync(false);
     }
     private async void More_Click(object sender,RoutedEventArgs e)=>await FetchBatchAsync(false);
     private async void Refresh_Click(object sender,RoutedEventArgs e)
@@ -444,7 +414,7 @@ public partial class MainWindow : Window
             if(!_relatedRequested)
             {
                 _relatedTask=LoadRelatedAsync(item,_videoMetadataGeneration);
-                if(!_settings.Incognito && !_demo)ObserveRatingTask(LoadDislikeStatsAsync());
+                if(!_settings.Incognito)ObserveRatingTask(LoadDislikeStatsAsync());
             }
             if(!preserveWatch && rememberHistory && priorItem is not null && !ReferenceEquals(priorItem,item))
             {_playbackTrail.Add(priorItem);if(_playbackTrail.Count>100)_playbackTrail.RemoveAt(0);UpdateSkipButtons();}
@@ -1017,32 +987,5 @@ public partial class MainWindow : Window
             Cleanup("thumbnail cache",()=>ThumbnailImage.Cache?.Dispose());ThumbnailImage.Cache=null;
             _allowClose=true;_=Dispatcher.BeginInvoke(Close,DispatcherPriority.Normal);
         }
-    }
-    private void ShowDemo()
-    {
-        ClearDisplayedItems();_hasFeed=false;_hasMore=false;WelcomePanel.Visibility=Visibility.Collapsed;ShowPanel("browse");
-        if(_pageTextFactory is null)SetPageUiText(()=>UiText.T("홈 추천","Home recommendations","ホームのおすすめ"));
-        _feedNavigationMetadata=null;ResetBrowseMetadata("demo");
-        var titles=new[]{"숲속의 아침, 창문 너머의 풍경","작게 시작하는 작업 공간 만들기","우주를 바라보는 새로운 방법","비 오는 날 듣는 피아노","좋아하는 것을 오래 즐기는 방법","도시를 떠나 걷는 하루","정리된 화면이 주는 여유","아름다운 건축을 찾아서"};
-        for(var i=0;i<36;i++)AppendItem(new(){Id=$"demo{i}",Title=titles[i%titles.Length],Channel=new[]{"일상의 기록","Studio Notes","Science Today","Slow Archive"}[i%4],Duration=180+i*47,ViewCount=12400+i*3400,Url="https://www.youtube.com/watch?v=BaW_jenozKc"});
-        SetFeedUiText(()=>UiText.T("데모 화면 · 네트워크 요청 없음","Demo screen · No network requests","デモ画面・ネットワークリクエストなし"));MoreButton.IsEnabled=false;SetStatus(()=>UiText.T("데모 화면입니다. 실제 계정·영상 재생 검증과 구분됩니다.","This is a demo screen. It does not verify real accounts or video playback.","これはデモ画面です。実際のアカウントや動画再生の検証とは別です。"));
-    }
-    private async Task CaptureSmokeAsync(string directory)
-    {
-        Directory.CreateDirectory(directory);var checks=new List<object>();
-        foreach(var scale in new[]{1d,1.25,1.5})
-        {
-            LayoutRoot.LayoutTransform=new ScaleTransform(scale,scale);Width=1380*scale;Height=900*scale;UpdateLayout();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
-            var dpi=VisualTreeHelper.GetDpi(this);var image=new RenderTargetBitmap((int)Math.Ceiling(ActualWidth*dpi.DpiScaleX),(int)Math.Ceiling(ActualHeight*dpi.DpiScaleY),96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);image.Render(this);
-            using(var file=File.Create(Path.Combine(directory,$"browse-{scale:0.00}.png"))){var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));encoder.Save(file);}
-            foreach(var button in new[]{HomeButton,SettingsButton})
-            {
-                var point=button.TranslatePoint(new Point(button.ActualWidth-5,button.ActualHeight/2),this);var hit=InputHitTest(point) as DependencyObject;var matches=false;
-                while(hit!=null){if(ReferenceEquals(hit,button)){matches=true;break;}hit=VisualTreeHelper.GetParent(hit);}
-                checks.Add(new{scale,control=button.Name,width=button.ActualWidth,height=button.ActualHeight,hit=matches});
-            }
-        }
-        LayoutRoot.LayoutTransform=Transform.Identity;
-        File.WriteAllText(Path.Combine(directory,"ui-smoke.json"),JsonSerializer.Serialize(new{type="WPF layout and hit-test simulation; not native DPI or mouse validation",checks},new JsonSerializerOptions{WriteIndented=true}));
     }
 }

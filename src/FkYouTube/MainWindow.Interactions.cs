@@ -380,7 +380,7 @@ public partial class MainWindow
                 option.Click += async (_, e) =>
                 {
                     e.Handled = true;
-                    if (_closing || _ratingsAccountBusy || !_playerStarted || generation != _videoGeneration || _demo) return;
+                    if (_closing || _ratingsAccountBusy || !_playerStarted || generation != _videoGeneration) return;
                     await TrackSubtitleTaskAsync(SelectSubtitleFromMenuAsync(
                         token => _player.SelectExternalSubtitleAsync(caption, mediaGeneration, token), caption.DisplayLabel, generation, caption.Language, mediaGeneration));
                 };
@@ -465,7 +465,7 @@ public partial class MainWindow
             item.Click += async (_, e) =>
             {
                 e.Handled = true;
-                if (_closing || _ratingsAccountBusy || !_playerStarted || generation != _videoGeneration || _demo) return;
+                if (_closing || _ratingsAccountBusy || !_playerStarted || generation != _videoGeneration) return;
                 await TrackSubtitleTaskAsync(SelectSubtitleFromMenuAsync(
                     token => _player.SelectSubtitleAsync(id, selection.MediaGeneration, token), id is null ? null : labelText(), generation,
                     selection.Tracks.FirstOrDefault(track => track.Id == id)?.Language, selection.MediaGeneration));
@@ -561,7 +561,7 @@ public partial class MainWindow
     private async void RatingRefresh_Click(object sender, RoutedEventArgs e)
     {
         if (_closing || _ratingsAccountBusy || _ratingBusy || _current is null || _settings.Incognito ||
-            !_session.IsConnected || _session.SelectedChannel is null || _demo) return;
+            !_session.IsConnected || _session.SelectedChannel is null) return;
         await TrackRatingTask(LoadCurrentRatingAsync());
     }
 
@@ -591,7 +591,7 @@ public partial class MainWindow
     private async void Rating_Click(object sender, RoutedEventArgs e)
     {
         if (_closing || _ratingsAccountBusy || _ratingBusy || _ratingReadCts is not null || _current is null ||
-            _settings.Incognito || !_session.IsConnected || _session.SelectedChannel is null || _demo ||
+            _settings.Incognito || !_session.IsConnected || _session.SelectedChannel is null ||
             _videoRating is not { CanRate: true, Value: not "unknown" } ||
             sender is not Button { Tag: string clicked } || clicked is not ("like" or "dislike")) return;
         var task = SetCurrentRatingAsync(RatingToggleTarget(_videoRating.Value, clicked));
@@ -624,13 +624,13 @@ public partial class MainWindow
 
     private async void DislikeStats_Click(object sender, RoutedEventArgs e)
     {
-        if (_closing || _ratingsAccountBusy || _current is null || _dislikeStatsCts is not null || _demo) return;
+        if (_closing || _ratingsAccountBusy || _current is null || _dislikeStatsCts is not null) return;
         await TrackRatingTask(LoadDislikeStatsAsync());
     }
 
     private async Task LoadDislikeStatsAsync()
     {
-        if (_current is not { } item || _closing || _ratingsAccountBusy || _demo) return;
+        if (_current is not { } item || _closing || _ratingsAccountBusy) return;
         var generation = _videoMetadataGeneration; var account = RatingAccountStamp;
         _dislikeStatsCts?.Cancel();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(_accountCts.Token);

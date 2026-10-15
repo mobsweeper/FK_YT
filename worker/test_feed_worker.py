@@ -608,7 +608,8 @@ class FeedWorkerTests(unittest.TestCase):
         stdout = io.StringIO()
         run(io.StringIO(input_lines), stdout, factory=Factory(lambda _url: None))
         events = [json.loads(line) for line in stdout.getvalue().splitlines()]
-        self.assertEqual([event["type"] for event in events], ["pong", "done", "error", "error"])
+        self.assertEqual([event["type"] for event in events], ["error", "done", "error", "error"])
+        self.assertEqual(events[0]["code"], "unsupported")
 
     def test_failure_during_continuation_is_categorized(self):
         def generator():

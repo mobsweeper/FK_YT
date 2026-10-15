@@ -144,7 +144,7 @@ gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --
 
 ### 개발자: 저장소 빌드와 최종 배포본은 구분해 주세요
 
-**현재 GitHub 앱 소스는 최종 clean 배포본의 소스와 같지 않습니다.** GitHub에는 clean에서 제거한 진단 실행 경로·파일이 남아 있습니다. 최종 앱 소스는 `1.0 source.zip`이며, 구체적인 차이와 재빌드 경계는 [배포 안내](docs/RELEASE-1.0.md#source-and-build-boundaries)에 적었습니다. 이번 문서 정리로 소스를 동기화한 것은 아닙니다.
+**GitHub의 앱·작업자 코드에도 최종 clean 배포본과 같은 진단 코드 제거를 반영했습니다.** 데모·스모크 실행 경로와 진단 전용 파일을 제거했으며, 일반 오류 처리와 프로세스 정리는 유지했습니다. 기존 `1.0 source.zip`과 비교한 범위, 문서·패키징 도구의 차이는 [배포 안내](docs/RELEASE-1.0.md#source-and-build-boundaries)에 적었습니다. 앱 코드가 일치해도 아래 Bootstrap이 최종 미디어 바이너리를 재현하는 것은 아닙니다.
 
 현재 저장소의 앱을 컴파일하려면 Git, **PowerShell 7**, 인터넷이 필요합니다. 다음 예제는 GitHub CLI도 사용합니다. 비공개 저장소 접근 권한이 있고 필요하다면 먼저 `gh auth login`으로 로그인하세요. 일반 사용자는 이 과정을 할 필요가 없습니다.
 
@@ -159,7 +159,7 @@ pwsh -NoProfile -File .\scripts\Build.ps1
 
 최종 앱 재빌드는 `1.0 source.zip`의 `release-1.0/BUILDING.txt`, 설치기 제작은 별도 `FK_YT-1.0-installer-source.zip`의 `docs/BUILDING.md`를 따릅니다. 설치기 소스는 이 저장소에 들어 있지 않습니다. 이 ZIP들도 아직 공개되지 않았습니다.
 
-현재 저장소에는 C# 테스트 프로젝트가 없으므로 `Build.ps1 -Test`를 안내하지 않습니다. 이번 문서 점검에서는 빌드를 다시 실행하지 않았으며, 명령·스크립트와 참조 파일의 존재를 확인했습니다. 다운로드·해시 검증 실패를 검증 해제로 넘기지 마세요.
+현재 저장소에는 C# 테스트 프로젝트가 없으므로 `Build.ps1 -Test`를 안내하지 않습니다. 진단 코드 제거 후 기존 SDK와 로컬 패키지 캐시를 사용한 잠금 빌드는 경고·오류 없이 통과했고, Python 오프라인 테스트 238개도 통과했습니다. 전체 Bootstrap 다운로드나 실제 앱 재생을 다시 시험한 것은 아닙니다. 다운로드·해시 검증 실패를 검증 해제로 넘기지 마세요.
 
 도구 설치 안내: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
 

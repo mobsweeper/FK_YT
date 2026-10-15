@@ -76,20 +76,6 @@ public sealed class MpvPlayerService : IAsyncDisposable
     public PlaybackSnapshot Snapshot { get { lock (_stateLock) return _snapshot; } }
     public string? PreferredSubtitleLanguage => Volatile.Read(ref _subtitleLanguage);
     public bool SubtitlesOff => Volatile.Read(ref _subtitleOff);
-    public IReadOnlyList<int> OwnedProcessIds
-    {
-        get
-        {
-            Session[] owners;
-            lock (_stateLock) owners = _retainedCookieSessions.Concat(_session is { } session ? [session] : Array.Empty<Session>()).Distinct().ToArray();
-            var ids = new HashSet<int>();
-            foreach (var owner in owners)
-                try { foreach (var id in owner.Process.GetProcessIds()) ids.Add(id); }
-                catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or ObjectDisposedException) { }
-            return ids.Order().ToArray();
-        }
-    }
-
     public bool HasActiveMedia(long expectedGeneration)
     {
         lock (_stateLock)
