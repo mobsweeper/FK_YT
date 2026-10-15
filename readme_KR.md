@@ -102,7 +102,9 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 ### 일반 사용자: 어떤 파일을 받으면 되나요?
 
-보통은 **`FK_YT-1.0-Setup-x64.exe`** 하나를 받으면 됩니다. 설치 없이 폴더째 쓰고 싶다면 **`1.0 portable.zip`**을 선택하세요. 두 파일은 로컬에 완성되어 있지만 **아직 GitHub에 첨부·공개하지 않았습니다.** 공개되면 [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases)의 `v1.0`에서 받는 방식입니다. `Code → Download ZIP`과 `1.0 source.zip`은 개발용 소스입니다.
+**간단하게 쓰려면 `1.0 portable.zip`을 권장합니다.** EXE 설치기는 포함된 검증 스크립트로 파일별 SHA-256을 확인하므로 이 과정에 시간이 걸릴 수 있습니다. 포터블은 설치 절차 없이 새 폴더에 전부 압축을 풀고 `FK_YT.exe`를 실행하면 됩니다. **두 방식의 앱·재생 기능과 포함된 실행 도구는 같습니다.** 설치 위치 설정, 바로가기 생성, Windows 앱 목록을 통한 제거가 편하다면 **`FK_YT-1.0-Setup-x64.exe`**를 선택하세요. 포터블에서도 배포 해시 확인은 권장합니다.
+
+두 파일은 로컬에 완성되어 있지만 **아직 GitHub에 첨부·공개하지 않았습니다.** 공개되면 [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases)의 `v1.0`에서 받는 방식입니다. `Code → Download ZIP`과 `1.0 source.zip`은 개발용 소스입니다.
 
 | 구분 | 설치형 EXE | 포터블 ZIP |
 | --- | --- | --- |
@@ -137,9 +139,9 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
-gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
-# 포터블을 원하면 위 다운로드 대신:
 gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --dir .\FK_YT-download
+# 설치형을 원하면 위 다운로드 대신:
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
 ```
 
 ### 개발자: 저장소 빌드와 최종 배포본은 구분해 주세요

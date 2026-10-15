@@ -102,7 +102,9 @@ Build-only tools are **.NET SDK 10.0.402**, **7zr 26.04** for extraction, and **
 
 ### For users: which file should I get?
 
-Normally, choose **`FK_YT-1.0-Setup-x64.exe`**. Choose **`1.0 portable.zip`** if you prefer an extracted folder without installation. Both files have been built locally but **neither has been attached or published on GitHub yet**. Once published, look for them under `v1.0` on [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases). `Code → Download ZIP` and `1.0 source.zip` are developer source downloads.
+**We recommend `1.0 portable.zip` for a straightforward setup.** The EXE installer runs a bundled verification script that checks each file against its SHA-256 hash, which can take some time. With the portable version, extract the whole archive into a new folder and run `FK_YT.exe` without going through Setup. **Both versions provide the same app and playback features and bundled runtime tools.** Choose **`FK_YT-1.0-Setup-x64.exe`** if you prefer an installation wizard, automatic shortcuts, and removal through Windows Settings. Checking the release checksum is still recommended for the portable ZIP.
+
+Both files have been built locally but **neither has been attached or published on GitHub yet**. Once published, look for them under `v1.0` on [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases). `Code → Download ZIP` and `1.0 source.zip` are developer source downloads.
 
 | Detail | Installer EXE | Portable ZIP |
 | --- | --- | --- |
@@ -137,9 +139,9 @@ Use these commands **only after `v1.0` is published with the named assets attach
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
-gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
-# For the portable version, use this instead of the EXE download:
 gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --dir .\FK_YT-download
+# For the installer, use this instead of the portable download:
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
 ```
 
 ### For developers: repository builds and the final release differ

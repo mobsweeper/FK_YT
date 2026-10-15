@@ -24,8 +24,8 @@ Names are exact, including the spaces in `1.0 portable.zip` and `1.0 source.zip`
 
 | File | Purpose / status | Bytes |
 | --- | --- | ---: |
-| `FK_YT-1.0-Setup-x64.exe` | Normal user installation; local final candidate | 220474101 |
-| `1.0 portable.zip` | Extract-and-run app; local final candidate | 295243814 |
+| `FK_YT-1.0-Setup-x64.exe` | Optional installer with shortcuts and Windows uninstall integration; local final candidate | 220474101 |
+| `1.0 portable.zip` | Recommended extract-and-run app; local final candidate | 295243814 |
 | `1.0 source.zip` | Exact clean application-source snapshot; local | 727085 |
 | `FK_YT-1.0-installer-source.zip` | Installer source, build instructions, pinned inputs/toolchain; local | 999620 |
 | `FK_YT_yt-dlp.zip` | FK_YT-assembled corresponding-source collection; draft attachment | 165231636 |
@@ -48,7 +48,9 @@ No personal-backup ZIP or user `data/` directory belongs in the public release.
 
 ## Installation, updates, and removal
 
-The [Korean](../readme_KR.md) and [English](../readme_EN.md) guides contain the user steps. The implementation is:
+The [Korean](../readme_KR.md) and [English](../readme_EN.md) guides contain the user steps. **The portable ZIP is the recommended option for straightforward setup:** the EXE installer's bundled verification script checks SHA-256 hashes file by file, which can take time, while portable users extract and run the app without those installer steps. Both contain the same app, playback features, and runtime tools; the installer adds installation, shortcut, and removal management. This is not a measured playback-performance comparison. Release-checksum verification is recommended for either download.
+
+The implementation is:
 
 - NSIS **3.13**, stock **x86 Unicode** engine installing an **x64** application; **MUI2**, English only, **zlib** compression. No language selector.
 - Per-user install, no administrator elevation. Default **`%LOCALAPPDATA%\Programs\FK_YT`**, with HKCU registration. Start Menu shortcut is created; Desktop shortcut is optional and off by default. No startup task or service is added.
