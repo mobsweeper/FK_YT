@@ -1,0 +1,2 @@
+05fd94e0901e22903db33d3bc4ee9f57bfb0509b93fb5010ef1aa6ad5df25d72  1.0 portable.zip
+f42ddc19f0dcc2c180e0b3ffe677ab9c76d302c1402f42ca1ba5e681d8c519c7  FK_YT-1.0-Setup-x64.exe
