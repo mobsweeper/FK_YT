@@ -2,6 +2,17 @@
 
 Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레이어만 띄웁니다.
 
+**일단 영상부터 틀자.** 재생 조작, 화질, 자막, 다음 영상 목록을 한 화면에 모았습니다. 플레이어만 따로 띄우고 싶으면 팝아웃을 누르면 됩니다.
+
+![영상 재생과 하단 조작 버튼, 다음 영상 목록이 표시된 FK_YT](assets/screenshots/playback-ko.png)
+
+| 시크릿 모드 | 설정·로그인 연결 |
+| :---: | :---: |
+| [![FK_YT 시크릿 모드 시작 화면](assets/screenshots/incognito-ko.png)](assets/screenshots/incognito-ko.png) | [![FK_YT 설정·로그인 연결 화면](assets/screenshots/settings-ko.png)](assets/screenshots/settings-ko.png) |
+| 로그인 쿠키를 사용하지 않고, 시청 기록과 이어보기 위치를 저장하지 않습니다. | 로그인 연결, 시청 기록 전송, 멤버십 영상 숨기기를 설정합니다. |
+
+*계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
+
 > **README 초안 · 2026-10-16**
 > 현재 GitHub에는 소스만 올라와 있습니다. NSIS 설치형 EXE와 포터블 ZIP은 제공 예정이며, 아직 릴리스하지 않았습니다. 설치 파일명·NSIS 버전·설치 및 제거 동작은 패키지가 확정되면 갱신합니다.
 
