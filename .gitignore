@@ -1,0 +1,9 @@
+tools/
+runtime/
+dist/
+data/
+artifacts/
+**/bin/
+**/obj/
+**/__pycache__/
+*.user
