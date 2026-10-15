@@ -36,7 +36,7 @@ The current source limits several kinds of work:
 
 I wanted to watch YouTube, not pay rent in RAM. Leaving it running in Firefox on my PC kept pushing memory usage up, and restarting the browser got old. So I had this made.
 
-FK_YT's code and the words you're reading were all handed off to AI. I said "make it" and it did. lol
+FK_YT's code and the words you're reading were all handed off to AI. I said "make it" and it did.
 
 I made it for myself. After-sales service may consist of absolutely nothing.
 
@@ -202,7 +202,7 @@ Review the terms and your rights to the content before use. A dedicated Firefox 
 
 **FK_YT's own code and documentation are distributed under the [MIT License](LICENSE).** External projects retain their respective licenses.
 
-MIT it is. The author probably couldn't tell you what that means, though. lol
+MIT it is. The author probably couldn't tell you what that means, though.
 
 The following projects are used. Final distributions must retain the licenses and notices appropriate to the actual versions and builds included.
 
@@ -232,6 +232,6 @@ The build scripts check and copy dependency notices. **Including notices alone i
 | Estimated debugging reviews delegated to agents | **About 165** |
 | Certified bug-free | Absolutely not |
 
-Based on **11 parallel review rounds × 15 review assignments**, checked on October 16, 2026. Repeat assignments to the same agents count; the main agent's own checks, separate external reviews, and individual follow-up questions do not. That's not 165 different AI models, and definitely not a claim of 165 bugs fixed. lol
+Based on **11 parallel review rounds × 15 review assignments**, checked on October 16, 2026. Repeat assignments to the same agents count; the main agent's own checks, separate external reviews, and individual follow-up questions do not. That's not 165 different AI models, and definitely not a claim of 165 bugs fixed.
 
 *This counts static code reviews only. Dynamic checks, including actual app execution and playback, could not be tallied.*
