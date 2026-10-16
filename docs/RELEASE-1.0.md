@@ -2,64 +2,65 @@
 
 Checked: **2026-10-16**. [한국어 사용 안내](../readme_KR.md) · [English user guide](../readme_EN.md)
 
-설치기·포터블 제작과 로컬 검증은 완료했지만 **공개 배포는 아직 하지 않았습니다.** GitHub 앱·작업자 소스에도 clean과 같은 진단 코드 제거를 반영했습니다. 이 저장소 갱신으로 기존 EXE·ZIP 내부 문서나 바이너리를 바꾸지는 않았습니다.
+포터블과 Program Files 관리자 설치기를 준비했습니다. **공개 배포 준비 중이며 일반 사용자 접근은 아직 확인하지 않았습니다.** 최종 설치기의 실제 설치·파일·등록·권한 검사는 확인했지만, 새 설치본 실행·업데이트·실제 제거는 미검증입니다. 포터블 앱 소스와 설치형 앱 소스는 다릅니다.
 
-The installer and portable package are built and locally verified within the scope below. **They are not publicly released.** GitHub app/worker sources now include the clean release's diagnostic-code removal. This repository update does not replace any existing EXE, ZIP, or document inside an archive.
+The portable package and Program Files administrator installer are prepared. The runnable EXE and portable ZIP are unchanged; source archives were separately repacked as described below. The final installer's actual installation, files, registration, and permissions were checked locally; installed-app launch/playback, update, and actual removal of this revision remain unverified.
 
 ## Publication status
 
-GitHub API inspection on the date above confirmed:
+<!-- PUBLICATION-STATUS-BEGIN: replace this block only after final asset hashes and unauthenticated release access are verified. -->
+**Pending publication.** Repository `mobsweeper/FK_YT` is private and `v1.0` is a draft. All 12 selected assets are attached; their server-reported SHA-256 values and sizes match the selected local files. The repaired sources, `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and complete checksum inventory are included. This authenticated draft check does not establish public access.
 
-- Repository: `mobsweeper/FK_YT`, **private**.
-- Release tag: **`v1.0`**, **draft**, not a published release.
-- Attached assets: `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, `FK_YT_mpv-FFmpeg-part2.zip`, and their `SHA256SUMS.txt`.
-- Not attached: the installer EXE, portable ZIP, application-source ZIP, and installer-source ZIP.
-- The draft source assets' GitHub digests and sizes match the local archives below. This verifies the draft uploads, **not public access**.
-
-[Releases](https://github.com/mobsweeper/FK_YT/releases) is a project reference requiring repository access while private. No draft URL is presented as a public download. The intended page after publication is `https://github.com/mobsweeper/FK_YT/releases/tag/v1.0`; its availability to general users has not been verified. This documentation change does not publish the release or change repository visibility.
+The intended binary-and-source page is [FK_YT 1.0](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0). General-user access to that page and every matching asset must be checked after publication. The final set is nine binary/ZIP assets plus `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and `SHA256SUMS.txt`: **12 assets** in total.
+<!-- PUBLICATION-STATUS-END -->
 
 ## Files and hashes
 
-Names are exact, including the spaces in `1.0 portable.zip` and `1.0 source.zip`. SHA-256 values and sizes were recalculated from the final local files. A subsequent repackage will require new hashes.
+These are the release asset names. GitHub uses dotted names **`1.0.portable.zip`** and **`1.0.source.zip`**. The runnable portable remains unchanged; application-source ZIPs were repacked for publication documentation and third-party source collections were repaired. Their new hashes therefore differ from archived pre-publication references. Internal build guides may retain older local input names. A later repackage requires new hashes.
 
 | File | Purpose / status | Bytes |
 | --- | --- | ---: |
-| `FK_YT-1.0-Setup-x64.exe` | Optional installer with shortcuts and Windows uninstall integration; local final candidate | 220474101 |
-| `1.0 portable.zip` | Recommended extract-and-run app; local final candidate | 295243814 |
-| `1.0 source.zip` | Exact clean application-source snapshot; local | 727085 |
-| `FK_YT-1.0-installer-source.zip` | Installer source, build instructions, pinned inputs/toolchain; local | 999620 |
-| `FK_YT_yt-dlp.zip` | FK_YT-assembled corresponding-source collection; draft attachment | 165231636 |
-| `FK_YT_mpv-FFmpeg-part1.zip` | Media source packages; draft attachment | 1608019975 |
-| `FK_YT_mpv-FFmpeg-part2.zip` | Media source, patches, build controls, dependency sources; draft attachment | 118613552 |
+| `FK_YT-1.0-Setup-x64.exe` | Optional administrator installer; Program Files, shared shortcuts, machine removal registration | 220931600 |
+| `1.0.portable.zip` | Recommended extract-and-run app; unchanged clean portable | 295243814 |
+| `1.0.source.zip` | Matching clean **portable app** source; publication documents updated, code/build inputs preserved | 564599 |
+| `FK_YT-1.0-machine-app-source.zip` | Matching **installed app** source and offline deterministic recipe; publication documents updated | 581075 |
+| `FK_YT-1.0-installer-source.zip` | Installer/helper source, updated build guide/input pins/source access, original executable source preserved | 1018688 |
+| `machine-public-payload.zip` | Exact assembled build input for recreating this installer; not the user portable download | 295477208 |
+| `FK_YT_yt-dlp.zip` | FK_YT-assembled corresponding-source collection; publication metadata repaired | 165234763 |
+| `FK_YT_mpv-FFmpeg-part1.zip` | Media source packages; publication metadata repaired | 1608074669 |
+| `FK_YT_mpv-FFmpeg-part2.zip` | Media sources/build controls; repaired metadata and added legal notices | 118680866 |
 
 ```text
-f42ddc19f0dcc2c180e0b3ffe677ab9c76d302c1402f42ca1ba5e681d8c519c7  FK_YT-1.0-Setup-x64.exe
-05fd94e0901e22903db33d3bc4ee9f57bfb0509b93fb5010ef1aa6ad5df25d72  1.0 portable.zip
-8bc5353985d5d874ba86dc5bb43f82b1a164fdaa9eb6393f1a70c7aa46323586  1.0 source.zip
-e016e5cfe0751a90c71ee3373bfb1a97664044140e891e7e52fec951649f6805  FK_YT-1.0-installer-source.zip
-29271824515a7ca05ac74d236b7a4d23e6cced9ba76f65974f7993f105791c47  FK_YT_yt-dlp.zip
-b37fad3902adbd1e12fdd78e390af108c50ebb170207af07c2a7edcbfc493928  FK_YT_mpv-FFmpeg-part1.zip
-7c45ffe820565ae35c4733b4093d8e0b56341e74fe09f3c56ee61faaba66d8fc  FK_YT_mpv-FFmpeg-part2.zip
+4e18c26503cab284c10843a4c076d4bcbdb79ab3a82e29cf95feab48bc905a4a  FK_YT-1.0-Setup-x64.exe
+05fd94e0901e22903db33d3bc4ee9f57bfb0509b93fb5010ef1aa6ad5df25d72  1.0.portable.zip
+862379cad447100962d2161d87205327b5b4f500d5bc4e5fe107b188a7564c35  1.0.source.zip
+17df8c037cf2906c997d5753b88a521320649b8c8a8e09a7ae26e13b104f83e9  FK_YT-1.0-machine-app-source.zip
+7df084b882b3e9a158a1fb4ac8c04607f89bb65c1f0c50f107a2b45e7254bae9  FK_YT-1.0-installer-source.zip
+a581d63f619c31643cbb5473ab3d41732d8966bd4485bd5af2847040819a428e  machine-public-payload.zip
+e22f4df8dcb40205dc9b2b2ade373a6d6f3d3e5adab786b36f628999504c8ab2  FK_YT_yt-dlp.zip
+b53ab130c5f1102874f7edbdfc49b0baa30fa1eb1251ad476e9e3624512c4129  FK_YT_mpv-FFmpeg-part1.zip
+5f499d855e975df0f8c72e0e2a3d3949b13f8f121a9c241273ca2b1c0337cc53  FK_YT_mpv-FFmpeg-part2.zip
 ```
 
-The repository's [SHA256SUMS.txt](../SHA256SUMS.txt) currently covers **only the EXE and portable ZIP**. The draft attachment of the same name currently covers **only the three third-party source ZIPs**. They are different inventories, not conflicting hashes for the same file. Before publication, provide one clearly scoped release checksum inventory covering every published asset. Installer output also has individual `.sha256` files and `release-output-manifest.json`.
+The block above identifies the selected binary/ZIP assets. Use the final release's **`SHA256SUMS.txt`**, with the dotted GitHub asset names, for the complete inventory including supplemental notices. The repository's [checksum file](../SHA256SUMS.txt) must be synchronized with that inventory; older inventories do not cover the complete release. The installer EXE is unsigned (`NotSigned`); hashes do not replace code signing.
 
 No personal-backup ZIP or user `data/` directory belongs in the public release.
 
 ## Installation, updates, and removal
 
-The [Korean](../readme_KR.md) and [English](../readme_EN.md) guides contain the user steps. **The portable ZIP is the recommended option for straightforward setup:** the EXE installer's bundled verification script checks SHA-256 hashes file by file, which can take time, while portable users extract and run the app without those installer steps. Both contain the same app, playback features, and runtime tools; the installer adds installation, shortcut, and removal management. This is not a measured playback-performance comparison. Release-checksum verification is recommended for either download.
+The [Korean](../readme_KR.md) and [English](../readme_EN.md) guides contain the user steps. **`1.0.portable.zip` is recommended for straightforward setup:** extract the whole ZIP into a writable folder and run `FK_YT.exe`. The administrator installer checks thousands of files and can take several minutes; its details view reports phases and file counts. Both provide the same viewing/playback features and external runtime tools. Their application DLLs differ to select the appropriate data location. This is not a measured playback-performance comparison.
 
 The implementation is:
 
 - NSIS **3.13**, stock **x86 Unicode** engine installing an **x64** application; **MUI2**, English only, **zlib** compression. No language selector.
-- Per-user install, no administrator elevation. Default **`%LOCALAPPDATA%\Programs\FK_YT`**, with HKCU registration. Start Menu shortcut is created; Desktop shortcut is optional and off by default. No startup task or service is added.
+- Installation and removal require administrator permission. Default **native 64-bit `%ProgramFiles%\FK_YT`**, normally `C:\Program Files\FK_YT`, with 64-bit **HKLM** registration. The app remains **`asInvoker`** and runs normally from Start Menu after Setup closes; elevated Setup does not launch it.
+- Shared Start Menu entries are **`FK_YT (System)`** and **`Uninstall FK_YT (System)`**. A shared Desktop shortcut is optional and off by default. Program files/state/shortcuts use protected Administrators-owned permissions with Users read/execute access. No startup task or service is added.
 - Native x64/AMD64, Windows build **19045 or later**; x86/ARM64 rejected. This is an installer policy floor, not a measured minimum runtime requirement or a vendor-support guarantee. Built-in 64-bit Windows PowerShell is used for installer operations.
-- An empty destination or a recognized installer-owned directory is required. Arbitrary nonempty folders, including portable folders, are rejected. Installation-root length is limited to 100 characters.
-- The app uses **`<app folder>\data`** for its settings, encrypted login session, history, and resume data in both installed and portable layouts. Account encryption is tied to the Windows user.
-- Updating the same owned installation preserves data and user-added files. Close FK_YT first. An optional normal-close request affects only that installation; it does not forcibly kill all processes with the same name.
-- Default uninstall removes matching owned program files, shortcuts, and registration while keeping data and user-added files. Modified or locked files can remain. Deleting `data/` requires a separate unchecked-by-default option and an additional confirmation. Files downloaded elsewhere are not removed.
-- A data-containing folder left after uninstall is not automatically recognized for reinstall. Preserve data, install into an empty folder, then restore it while the app is closed.
+- The directory page permits only a direct app-folder child of native 64-bit Program Files, empty or already owned by the machine installer, with a root length of at most 100 characters. Portable and legacy per-user installs are not migration targets.
+- Installed mode uses **the running Windows user's `%LOCALAPPDATA%\FK_YT\data`** for settings, encrypted sign-in, history, and resume positions. The exact `FK_YT.install-mode` marker (`machine-v1` plus LF) selects that mode. Portable mode without that marker keeps **`<app folder>\data`**. DPAPI sign-in encryption remains tied to the Windows user.
+- Machine updates are designed to preserve profile data and user-added files. Close FK_YT first; optional normal close is limited to the selected installation and does not force-kill processes. Actual updates of this final revision have not been verified.
+- Machine removal is designed to remove unchanged owned program files, common shortcuts, and HKLM registration. It **always preserves every user's profile data and downloads**, does not enumerate user profiles, and rejects production `RemoveData`. There is no data-deletion checkbox. Added/modified/locked program-folder files can remain. Actual removal of this final revision has not been verified.
+- Existing per-user installs, shortcuts, and data are not moved, replaced, or removed automatically. For manual migration, close both apps, retain the source, and copy as the original Windows user into an empty destination; do not merge SQLite databases. Remove your own profile data separately only if you deliberately want to erase it.
 - .NET Runtime, Python, yt-dlp, Deno, mpv, FFmpeg/ffprobe, their required DLLs and runtime data are included. No separate SDK or system-wide runtime install is requested. Setup works offline; online YouTube/RYD features need internet.
 - The installer EXE reports **`NotSigned`**. No real downloaded-file SmartScreen warning text or reputation result was established by the local installation tests.
 
@@ -67,21 +68,24 @@ The version table in both READMEs describes the actual clean payload. NSIS, .NET
 
 ## Verification scope
 
-The installer was built from the pinned portable ZIP without rebuilding the app or acquiring replacement tools. All **11,345 original files** were preserved. The installer adds 11 files: a supplemental source-access notice, an installer manifest, and original NSIS notices/source excerpts. **11,356 static payload files** were checked after installation. Generated `Uninstall.exe` and installer ownership state are tracked separately.
+The original **11,345-file portable ZIP remains unchanged**. The machine payload overlays the approved rebuilt `FK_YT.dll` for data-path selection and adds the fixed mode marker and provenance/manifest records. **10,930 external runtime, worker, and original-notice files were verified byte-for-byte unchanged.** The resulting input contains 11,349 files; installer additions bring it to **11,360 static files**, with generated `Uninstall.exe` tracked separately. The installed app source is therefore not interchangeable with the portable source.
 
 | Check | Established result |
 | --- | --- |
 | Compile | NSIS build succeeded with warnings treated as errors; zero compiler warnings/errors |
-| Boundary checks | 18 build-helper unit checks and 16 PowerShell transaction fixtures passed; these are separate from full installation tests |
-| Test system | Windows 10 Pro 22H2 x64, **19045.6456**, existing development PC, non-elevated user |
-| Install / launch | Actual installation, Start Menu entry, normal app window, app-local CoreCLR/WPF loading, normal close |
-| Files | Full installed payload matched the expected hashes; an independent file check agreed |
-| Update | Running-target update without close consent was refused; after closing, same-version update succeeded and retained synthetic data and an added file |
-| Default uninstall | Program registration, matching program files and shortcuts removed; synthetic data and user-added file retained |
-| English UI | Installer/uninstaller pages and cancellation/error/confirmation controls inspected; not a full visual-layout or multi-DPI test |
-| Tools / local media | Installed tools ran; 1-second local video/audio with selected external WebVTT reached normal EOF using CPU/null outputs |
+| Offline fixtures | 27 installer/helper transaction checks, 19 packaging checks, and 7 app data-path groups passed; fixtures are separate from real HKLM/Program Files lifecycle tests |
+| App rebuild | Matching installed-app source rebuilt offline; EXE/DLL/deps/runtimeconfig hashes matched repeat builds and builds in a different source/build root |
+| Test system | Windows 10 Pro 22H2 x64, **19045.6456**, existing development PC; user approved elevated installation |
+| Actual machine installation | Installed to default `C:\Program Files\FK_YT`; all 11,360 static files and the generated uninstaller matched their expected records; no untracked files or program-folder data |
+| Registration / permissions | Machine registration and common start/remove shortcuts checked; sampled program directories/files/state/shortcuts had protected Administrators-owned ACLs with Users read/execute |
+| Installer temporary files | Non-elevated file creation in the extracted Temp directory and generic read of the helper were denied. Label-specific queries of the directory, helper, and System DLL returned no explicit integrity-label ACE (Windows treats unlabeled objects as Medium). This does not verify the uninstaller's pre-callback copy path |
+| Final installed app launch / playback | **Unverified**; source/path checks and successful file installation do not establish a normal app launch or playback |
+| Final machine update / actual removal | **Unverified**; previous per-user-installer lifecycle results and helper fixtures do not establish these operations for this revision |
+| Portable startup | Clean portable extraction produced a normal app window and normal exit; no user account/cookies or online video requests were used |
 
-This does **not** establish a clean-PC prerequisite test, Windows 11 runtime qualification, real GPU/audio/subtitle rendering, live YouTube/account behavior, every upgrade migration, actual disk-full recovery, or power-loss recovery. No fresh installation or playback was performed merely for this documentation update. Tests used isolated synthetic data; current user sessions were not needed.
+Earlier verification snapshots were recorded **before UAC installation**. Later observations establish the installation/file/permission checks above; they do not add launch, update, or removal results. Earlier timing/lifecycle results concern a different per-user installer and are not final administrator-installer proof.
+
+This does **not** establish clean-PC prerequisites, Windows 11 runtime qualification, another administrator's UAC credentials, real GPU/audio/subtitle rendering, live YouTube/account behavior, every upgrade migration, real disk-full recovery, power-loss recovery, or the uninstaller's initial Temp-copy protections. SmartScreen behavior after a real distribution download is also untested. This documentation work did not run the app or installer.
 
 ## Corresponding source and licenses
 
@@ -97,7 +101,7 @@ FK_YT's own code and documentation use [MIT](../LICENSE). This does not relicens
 
 ### Legacy notice mapping
 
-Original payload notices were preserved, so they still name the prior archives. The archives were **repacked**, not just renamed; their SHA-256 values changed. The installer adds `INSTALLER-SOURCE-ACCESS.txt` to explain the mapping below without editing original copyright/license texts. For current names, use the hashes in “Files and hashes” above.
+Original runtime/payload notices were preserved, so they still name earlier archives. The current source collections were **repacked**, not merely renamed; their SHA-256 values changed again during publication repair. Use the current hashes in “Files and hashes” above and the release's **`SOURCE-ACCESS.txt`** for the complete archive mapping. The installed `INSTALLER-SOURCE-ACCESS.txt` remains its build-time snapshot rather than the current release inventory.
 
 | Legacy filename in unchanged payload notices | Legacy SHA-256 | Current asset |
 | --- | --- | --- |
@@ -105,7 +109,7 @@ Original payload notices were preserved, so they still name the prior archives. 
 | `FK_YT-20261016-media-corresponding-source-1.zip` | `d5efb6f1a41da8bcc9c2c8b7248d8c5a0aaf62ab2fb016468d52015fab882560` | `FK_YT_mpv-FFmpeg-part1.zip` |
 | `FK_YT-20261016-media-corresponding-source-2.zip` | `8cd57af6917ff2582a0eae3a3fa778ab790e0580f176afe32f4350146709d478` | `FK_YT_mpv-FFmpeg-part2.zip` |
 
-The current installer supplement still correctly describes a **private draft**. The portable ZIP has the legacy notices without that installer supplement. Neither should be described as already containing this updated repository guide.
+Archived payload notices and input metadata can retain the **private/draft state and earlier source hashes from build time**. The runnable binaries remain unchanged. Release-side **`SOURCE-ACCESS.txt`** and **`LICENSES-SUPPLEMENT.txt`** provide the current URLs, dotted filenames, hash mappings, and legal additions. Repaired source ZIPs have their own updated metadata and hashes; the supplements do not replace original copyright/license texts or establish public access before it is checked.
 
 ### Getting the sources after publication
 
@@ -113,10 +117,18 @@ These commands use the real intended tag and exact filenames. **They are conditi
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
-gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT_yt-dlp.zip' --pattern 'FK_YT_mpv-FFmpeg-part1.zip' --pattern 'FK_YT_mpv-FFmpeg-part2.zip' --pattern 'SHA256SUMS.txt' --dir .\FK_YT-sources
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT_yt-dlp.zip' --pattern 'FK_YT_mpv-FFmpeg-part1.zip' --pattern 'FK_YT_mpv-FFmpeg-part2.zip' --pattern 'SOURCE-ACCESS.txt' --pattern 'LICENSES-SUPPLEMENT.txt' --pattern 'SHA256SUMS.txt' --dir .\FK_YT-sources
 # Application and installer sources, once attached:
-gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 source.zip' --pattern 'FK_YT-1.0-installer-source.zip' --dir .\FK_YT-sources
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0.source.zip' --pattern 'FK_YT-1.0-machine-app-source.zip' --pattern 'FK_YT-1.0-installer-source.zip' --pattern 'machine-public-payload.zip' --dir .\FK_YT-sources
 ```
+
+### Publication source repairs
+
+The three third-party collections update **40 distributor metadata/helper entries**, while **3,099 retained original entries** were checked byte-for-byte identical. No distributed runtime executable or upstream source/legal text was rewritten. Six source-side notice files were added: the exact version-associated difflib 0.4.0 notice, MIT and Apache-2.0 notices for both winapi GNU architecture crates 0.4.0, and simd_helpers 0.1.0's official LICENSE-only follow-up. The latter is explicitly identified as a subsequent upstream notice, not a file claimed to have been present in the original crate. `LICENSES-SUPPLEMENT.txt` retains these notice texts and their origins.
+
+Four source blobs—`block 0.1.6`, `malloc_buf 0.0.6`, `objc-foundation 0.1.1`, and `objc_id 0.1.1`—were intentionally excluded because they belong to a macOS-only dependency branch unused by the native Windows build, and their standalone project-specific notices were not independently recovered. The Windows-focused collection supplies **643 crate archives**. Upstream cross-platform lock files remain intact, so those files can still name the excluded crates; this is not a complete macOS source collection.
+
+Broken distributor URL fields were repaired where evidence existed. **1,242 unrecoverable historical URL fields are explicitly `null`**, with the reason documented rather than an invented origin. Source index sizes/hashes were verified, and both media ZIPs' shared index/README/publication notes match. Application-source repacks change publication documents and metadata while preserving application code, build inputs, and original legal texts. This publication work did not rebuild or execute the application.
 
 ### Remaining source/reproducibility limits
 
@@ -124,13 +136,12 @@ Provided source archives, notices and hashes were checked; this is not a legal c
 
 - The complete tool/runtime cohort and official yt-dlp EXE have not been independently rebuilt byte-for-byte.
 - The supplier's final historical librsvg Cargo.lock was not captured. The supplied reconstruction and conservative source superset are labelled as such, not presented as the exact historical lock. Independent supplier-package GPG verification has not been established.
-- The Rust coverage report records eight conservative entries without independently recovered standalone legal texts; declared license expressions and exact source archives are retained. Resolving that evidence gap remains separate from copying notice files.
-- Some supplementary origin links in `media-source/rust/RUST-SOURCE-COVERAGE.md` inside media part2 were damaged during metadata normalization. Correcting them requires a new source ZIP and updated hashes. Exact source archives and origin/hash indexes are separate retained records.
+- The simd_helpers addition is a labelled upstream follow-up; the four macOS-only source exclusions and unrecovered historical URLs remain explicitly documented. These repairs do not recover every historical build input or certify every legal issue.
 - A few preserved legacy notices refer to build evidence not included in the public source collection. Public build controls provide the current guidance; those historical references are not promises of additional downloadable files.
 
 ## Source and build boundaries
 
-**GitHub app/worker code is aligned with the clean application source in `1.0 source.zip`.** The diagnostic removal covers demo/smoke dispatch, fixture helpers and diagnostic process-ID reporting, plus the worker's ping/pong command and its two affected tests. Normal error handling, Job Object ownership and process cleanup remain. Newer repository introductions, screenshots and documentation are preserved.
+**GitHub app/worker code is aligned with the portable clean application source in `1.0.source.zip`.** The diagnostic removal covers demo/smoke dispatch, fixture helpers and diagnostic process-ID reporting, plus the worker's ping/pong command and its two affected tests. Normal error handling, Job Object ownership and process cleanup remain. The installed app adds the approved `RuntimePaths.cs` data-path selection change; its full matching source is **`FK_YT-1.0-machine-app-source.zip`**, not the portable source alone.
 
 The four removed diagnostic sources are `MainWindow.FeatureVerification.cs`, `MainWindow.PlaybackVerification.cs`, `MainWindow.Verification.cs`, and `Playback/PlaybackSmoke.cs`. Developer unit tests remain separate from the application. The repository is still not a byte-for-byte copy of the entire source ZIP: `scripts/Publish.ps1` retains its repository-specific document-copy handling, and the source ZIP includes release materials absent from this checkout. These differences do not justify replacing the final runtime with historical Bootstrap downloads.
 
@@ -139,32 +150,32 @@ The four removed diagnostic sources are `MainWindow.FeatureVerification.cs`, `Ma
 | Prepare SDK / compile repository | Existing `scripts/Bootstrap.ps1 -Component Dotnet`, then `scripts/Build.ps1` | Builds the aligned app source; does not recreate the full final runtime package |
 | Prepare historical runtime | Existing `scripts/Bootstrap.ps1` and `scripts/Bootstrap-Ffmpeg.ps1` | Acquires locked historical supplier binaries, not the final licensed media cohort |
 | Local development package | Existing `scripts/Publish.ps1` | Self-contained `win-x64` folder; fresh direct child of `dist/` required. Does not publish online or produce NSIS |
-| Clean app rebuild | `1.0 source.zip` → `release-1.0/BUILDING.txt` | Locked restore/publish of clean app; use a fresh matching portable extraction for runtime/notices |
+| Clean portable app rebuild | `1.0.source.zip` → `release-1.0/BUILDING.txt` | Locked restore/publish of portable app; use a fresh matching portable extraction for runtime/notices |
+| Installed app rebuild | `FK_YT-1.0-machine-app-source.zip` → `MACHINE-APP-BUILD.md`, `scripts/BuildMachineApp.ps1` | Offline locked/deterministic build including the installed data-path change; not an app execution test |
 | Exact media build controls | Both media source ZIPs → supplied build instructions / `REBUILD-MPV.ps1` | Separate media build inputs and instructions; not a full-cohort reproduction claim |
-| Installer build | `FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`, `build_installer.py`, `src/FK_YT.nsi` | Packages the pinned portable unchanged; no Bootstrap or app rebuild |
+| Exact supplied installer input | `machine-public-payload.zip` | Already assembled payload pinned by the active installer build lock; use directly for the supported installer command |
+| New payload assembly | Installer source → `prepare_machine_payload.py` | Can regenerate a reviewed payload; repacked app-source metadata makes its ZIP hash differ from the supplied original input |
+| Installer build | `FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`, `build_installer.py`, `src/FK_YT.nsi` | Packages the pinned supplied payload using current matching source references; executable source preserved, byte-identical EXE rebuild not claimed |
 
 The SDK is **10.0.402**. The repository's `dependencies.lock.json` still identifies historical shinchiro mpv and Gyan FFmpeg inputs, while final binaries use the controlled mpv/MSYS2 builds above. The final source archive itself labels that acquisition lock historical. Do not weaken its hash checks to substitute final binaries into the historical Publish workflow.
 
-The installer source ZIP is separate from this Git repository. It requires Python 3.10+, the exact official NSIS 3.13 binary/source archives in its toolchain lock, and all pinned inputs. From an extracted installer-source folder with those toolchain files prepared, its supported explicit-path command is:
+The installer source ZIP is separate from this repository and does not embed the complete installed-app source or payload. For its supported build, use the supplied **`machine-public-payload.zip`** directly, the current matching installed-app source archive, the three repaired third-party source collections, Python 3.10+, and the exact official NSIS 3.13 binary/source archives in its toolchain lock. After arranging the inputs as described in the source ZIP's `docs/BUILDING.md`, run:
 
 ```powershell
-python build_installer.py --portable 'inputs/1.0 portable.zip' --app-source 'inputs/1.0 source.zip' --release-sources 'inputs/corresponding-source' --stage-dir 'stage' --output-dir 'output' --compile
+python build_installer.py --portable 'inputs/machine-public-payload.zip' --app-source 'inputs/FK_YT-1.0-machine-app-source.zip' --release-sources 'inputs/corresponding-source' --tooling-dir 'tooling' --stage-dir 'stage' --output-dir 'output' --compile
 ```
 
-Those `inputs/` files and the toolchain are prerequisites, not files already present in this Git checkout or the installer-source ZIP. The helper does not download them. Use the archive's guide for their pinned locations, and fresh staging/output for changed inputs. Compiling does not upload or publish a release.
+The supplied payload's exact SHA-256 is **`a581d63f619c31643cbb5473ab3d41732d8966bd4485bd5af2847040819a428e`**. Rebuilding the app separately requires the pinned **.NET SDK 10.0.402**, **PowerShell 7**, and a reviewed locked offline NuGet cache. Regenerating a payload with the repacked app-source archive records a different source hash in its metadata, so the resulting payload ZIP **will not match the supplied payload hash**. Review and pin such a new payload in a separate build lock; do not weaken the original check or present it as the same input. Inputs/cache/toolchain are prerequisites rather than files already embedded in this checkout or installer-source ZIP, and the helper does not download them.
 
-After diagnostic removal, all 68 shared `src/` and `worker/` files match the clean source ZIP byte-for-byte. A Release build using SDK 10.0.402, locked restore and the existing local NuGet cache passed with zero warnings/errors. All 238 offline Python tests passed. No application launch, online account request, or new media playback test was performed. There is no C# test project in the current repository; `Build.ps1 -Test` must not be used as a working instruction here. The historical Publish script also does not copy the language guides/assets as a complete documentation bundle; its output is not the curated final user distribution.
+The installer-source publication repack changes only its build guide, active input pins, and source-access notice. **24 original entries, including executable source, tests, original licenses, icons, and build manifests, remain byte-identical.** Historical build-time input/source-access snapshots are retained separately. Recompiling now changes embedded publication metadata/guidance, so the result is not claimed to reproduce the already supplied EXE byte-for-byte. Source repacking was not a new installer compile or lifecycle test, and compiling does not upload or publish a release.
 
-## Work still required before a public release
+The earlier repository comparison found all 68 shared `src/` and `worker/` files identical to the **portable** source after diagnostic removal. Its locked Release build passed with zero warnings/errors, and 238 offline Python tests passed. The installed-app production source previously rebuilt the expected DLL hash `d09ef13fce3029a8943ddd149eeb770dde024543276fe8e7ab98a200111723d6`; app EXE/DLL/deps/runtimeconfig also matched repeat builds in different paths. The current app-source publication repacks preserve **102 portable and 106 installed-app code/build-input files** and original legal texts, with ZIP CRC and exact manifests checked; they were not another app rebuild or launch. This does not mean every third-party runtime was rebuilt byte-for-byte. There is no C# test project in the repository; `Build.ps1 -Test` is not a working instruction here. Historical Publish output is not the curated final user distribution.
 
-공개 전에는 아래 실제 작업이 남아 있습니다. **이번 문서 커밋으로 EXE·ZIP이 바뀐 것은 아닙니다.**
+## Publication checks and verification limits
 
-1. Include the clean source ZIP with the final release and keep the documented packaging/runtime distinctions intact. Diagnostic-code removal is now synchronized in GitHub app/worker code; this does not synchronize the historical media acquisition workflow.
-2. Correct broken supplementary source links and unresolved source/notice references without altering original legal texts. If source ZIP bytes change, regenerate their hashes and all dependent mappings/locks. Preserve and explicitly qualify remaining reconstruction/reproducibility limits.
-3. Prepare the real binary-and-source publication location. Update additive source-access guidance, user guides and input locks to that location; preserve original notices. Add the current source mapping to the portable documentation as well. These are **archive changes requiring repackaging**, not changes made by this commit.
-4. Rebuild the installer from the resulting verified portable/input set in a fresh stage; repackage installer source, regenerate output manifests and checksums, and repeat checks appropriate to the changed inputs. Existing hashes in this guide identify the current candidates only.
-5. Upload the matched installer, portable, application source, installer source, three third-party source assets and a clearly scoped checksum inventory. The current draft's four source-related assets alone are insufficient as a user download set. No personal backups or user data.
-6. Repository visibility and release publication require a separate authorized action. When published, verify unauthenticated access to both binaries and their matching sources on `v1.0`; then update the dated status in all READMEs. A successful authenticated draft inspection does not satisfy this check.
-7. Clean Windows 11 standard-user testing without a system SDK/.NET remains unperformed. Complete it or explicitly retain the limitation; do not turn the existing Windows 10 development-PC test into clean-machine proof. Keep signing/SmartScreen and untested runtime/power-loss limits separate as well.
+공개 전 접근 확인과 런타임 미검증 범위를 구분합니다. 실행용 EXE·포터블은 그대로이며, 공개 소스 ZIP의 문서·출처·추가 고지는 위 범위에서 보완했습니다.
 
-No repository visibility, release publication, installed application, user data, existing EXE, or ZIP is changed by this source/documentation update.
+1. Keep the **12 selected release assets** and the complete checksum inventory synchronized if any bytes change. The installed-app source must accompany the installed DLL; portable source alone does not describe that app change. Preserve original legal texts and the explicit source/reproducibility limits above.
+2. After publication, verify **unauthenticated** access to `v1.0`, the binary downloads, both app-source variants, installer source, the supplied machine payload, all three third-party source collections, and supplemental notices/checksums. Replace each `PUBLICATION-STATUS` block in these three guides with the confirmed result. Authenticated draft inspection is not that check.
+3. Keep final installed-app launch/playback, real machine update/removal, and the uninstaller's initial Temp-copy ACL/access checks explicitly unverified until tested. The observed installer-Temp checks and earlier per-user lifecycle results do not complete them.
+4. Retain the untested clean Windows 11/no-system-runtime, alternate UAC account, SmartScreen, real GPU/audio, live account, disk-full and power-loss limits. Do not turn the existing Windows 10 development-PC checks into clean-machine proof.

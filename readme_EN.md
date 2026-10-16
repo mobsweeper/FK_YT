@@ -1,5 +1,7 @@
 # FK_YT 1.0
 
+**[한국어 안내](readme_KR.md)** · [English](readme_EN.md)
+
 A personal YouTube viewer for Windows. Lists and a player, without keeping the YouTube webpage running.
 
 **Watch, queue, and keep going.** Playback controls, quality, subtitles, and the next videos share one window. Pop the player out when you need more room.
@@ -13,8 +15,10 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 *Account details and selected thumbnails are blurred. Videos and artwork shown belong to their respective rights holders.*
 
+<!-- PUBLICATION-STATUS-BEGIN: replace this block only after unauthenticated release access is verified. -->
 > **1.0 distribution status · checked October 16, 2026**
-> The installer EXE and portable ZIP have been built and locally checked within the scope below. The repository is **private** and `v1.0` is a **draft**; there is no public release available to general users yet. The draft currently contains only three third-party corresponding-source archives and their checksum file. See the [artifact list, hashes, and remaining publication work](docs/RELEASE-1.0.md).
+> The portable ZIP and administrator installer are prepared. The repository is **private** and `v1.0` is a **draft** while publication is being prepared; public downloads and matching source access are not yet confirmed. The final installer has passed local installation/file/permission checks, but its installed-app launch, update, and actual removal remain unverified. See the [files, hashes, and verification scope](docs/RELEASE-1.0.md).
+<!-- PUBLICATION-STATUS-END -->
 
 ## 1. Language
 
@@ -59,7 +63,7 @@ That is the author's experience on one PC, not a finding that every Firefox inst
 
 | Data or action | Handling |
 | --- | --- |
-| Settings, history, resume positions | Stored locally under the app's `data/` directory |
+| Settings, history, resume positions | Installed version: `%LOCALAPPDATA%\FK_YT\data` for each Windows user. Portable version: `data/` inside the extracted app folder |
 | Sign-in session | Connected from a Firefox profile or Netscape cookie file. The stored app session is encrypted with Windows DPAPI for the current Windows user |
 | YouTube requests | Feeds, playback, comments, and other features contact YouTube/Google and media/image CDNs. Authenticated features use the selected session |
 | YouTube watch history | In normal mode, attempts to report actual playback when history synchronization is enabled. It is enabled by default |
@@ -76,12 +80,12 @@ There are security limits. Tools may need temporary plaintext cookie files, and 
 ## 5. Requirements and versions
 
 - Installer acceptance floor: **Windows 10 22H2, build 19045 or later, x64 (AMD64)**. Windows 11 x64 is also a target. x86 and ARM64 are not accepted. This does not mean every Windows 10 version is supported.
-- Installation, launch, update, and default uninstall were tested on **Windows 10 Pro 22H2 x64, build 19045.6456**. This PC has development tools; a clean Windows 11 standard-user environment has not been tested.
+- Local checks used **Windows 10 Pro 22H2 x64, build 19045.6456**, a PC with development tools. The final administrator installer was installed and its files, machine registration, and permissions checked. **The final installed app's launch/playback, update, and actual removal have not been verified.** Earlier per-user-installer results do not establish those checks for this revision. A clean Windows 11 standard-user environment has not been tested.
 - Installer acceptance is separate from vendor support. The tested Windows 10 Pro 22H2 system is not presented as an officially supported .NET 10 environment. Check editions and lifecycle status in the [.NET 10 supported OS table](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
 - Users **do not need to install .NET, Python, Deno, mpv, FFmpeg, or an SDK separately**. The required runtimes and tools are included in the app folder. Setup uses Windows' built-in 64-bit PowerShell.
 - Account connection uses Firefox or a Netscape-format cookie file you supply. Search and some playback also work without signing in.
 
-These are the actual components in the final clean portable package and the installer that preserves it. The historical [dependency lock](dependencies.lock.json) alone does not describe the final media binaries.
+These are the components in the clean portable package and the administrator installer's preserved external runtime set. The installed variant has a separately rebuilt app DLL for its user-data location; its matching source is supplied separately. The historical [dependency lock](dependencies.lock.json) alone does not describe the final media binaries.
 
 | Bundled component | Version / build | Purpose |
 | --- | --- | --- |
@@ -96,59 +100,60 @@ These are the actual components in the final clean portable package and the inst
 | Microsoft.Data.Sqlite / SQLitePCLRaw | **10.0.13 / 3.0.5** | Local database |
 | Native SQLite package | **3.53.4** | Separate from Python's included SQLite |
 
-Build-only tools are **.NET SDK 10.0.402**, **7zr 26.04** for extraction, and **NSIS 3.13** for installer creation. The SDK, compiler, and 7zr are not installed into the user application folder. Setup uses NSIS **Unicode / Modern UI 2 (MUI2), English only, and zlib compression**. The NSIS x86 Unicode engine installs the x64 app payload.
+Build-only tools are **.NET SDK 10.0.402**, **7zr 26.04** for extraction, and **NSIS 3.13** for installer creation. The SDK, compiler, and 7zr are not installed into the application folder. Setup uses NSIS **Unicode / Modern UI 2 (MUI2), English only, and zlib compression**. The NSIS x86 Unicode engine installs the x64 app payload.
 
 ## 6. Installation and launch
 
 ### For users: which file should I get?
 
-**We recommend `1.0 portable.zip` for a straightforward setup.** The EXE installer runs a bundled verification script that checks each file against its SHA-256 hash, which can take some time. With the portable version, extract the whole archive into a new folder and run `FK_YT.exe` without going through Setup. **Both versions provide the same app and playback features and bundled runtime tools.** Choose **`FK_YT-1.0-Setup-x64.exe`** if you prefer an installation wizard, automatic shortcuts, and removal through Windows Settings. Checking the release checksum is still recommended for the portable ZIP.
+**We recommend `1.0.portable.zip` for a straightforward setup.** Extract the whole archive into a new writable folder and run `FK_YT.exe` inside `FK_YT`; administrator permission is not needed there. The EXE installer verifies thousands of files and can take several minutes, with phase and file-count messages in its details view. **Both provide the same viewing/playback features and bundled runtime tools.** The installer adds machine-wide program installation, shared shortcuts, and Windows removal registration; its app DLL differs to keep data in each user's profile. Check the release checksum for either download.
 
-Both files have been built locally but **neither has been attached or published on GitHub yet**. Once published, look for them under `v1.0` on [GitHub Releases](https://github.com/mobsweeper/FK_YT/releases). `Code → Download ZIP` and `1.0 source.zip` are developer source downloads.
+The download page is [FK_YT 1.0 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0); use it after publication is confirmed in the status above. `Code → Download ZIP` and `1.0.source.zip` are developer source downloads, not ready-to-run packages. GitHub normalizes spaces in asset names to dots; the unchanged runnable portable is `1.0.portable.zip`. Source archives were separately repacked to update publication documentation and notices, so use their current release hashes.
 
 | Detail | Installer EXE | Portable ZIP |
 | --- | --- | --- |
-| First launch | Run Setup → follow its English pages → use `Launch FK_YT` or the FK_YT Start Menu entry | Extract the **whole** ZIP into a new folder → run `FK_YT.exe` inside `FK_YT` |
-| Default location | `%LOCALAPPDATA%\Programs\FK_YT` | A writable folder you choose |
-| Administrator rights | Not required; installs for the current Windows user | Not required in a writable location |
-| Shortcuts | Start Menu; optional Desktop shortcut, off by default | None created automatically |
-| Data | `%LOCALAPPDATA%\Programs\FK_YT\data`, or `<installation folder>\data` for a custom location | `<extracted FK_YT folder>\data` |
-| Removal | Windows app removal or `Uninstall.exe` in the installation folder | Close the app and delete its folder; deleting `data` also deletes your app data |
+| First launch | Approve Windows' administrator request → follow Setup's English pages → close Setup → open **FK_YT (System)** from Start Menu | Extract the **whole** ZIP into a new folder → run `FK_YT.exe` inside `FK_YT` |
+| Default location | Native 64-bit `%ProgramFiles%\FK_YT`, normally `C:\Program Files\FK_YT` | A writable folder you choose |
+| Administrator rights | Required for installation and removal; the app runs with normal user permissions | Not required in a writable location |
+| Shortcuts | Shared Start Menu: **FK_YT (System)** and **Uninstall FK_YT (System)**; optional shared Desktop shortcut, off by default | None created automatically |
+| Data | Each running Windows user's `%LOCALAPPDATA%\FK_YT\data` | `<extracted FK_YT folder>\data` |
+| Removal | Windows app removal, **Uninstall FK_YT (System)**, or installed `Uninstall.exe`; profile data is preserved | Close the app and delete its folder; deleting `data` also deletes your app data |
 
-Setup accepts an empty folder or an existing installation it owns. Do not install directly over a portable folder. The installation root must be at most 100 characters long. Keep `runtime/`, `worker/`, DLLs, and license notices intact.
+The directory page accepts an empty app folder directly inside native 64-bit Program Files, or an existing machine installation it owns. It rejects portable folders and earlier per-user installations rather than migrating them. The installation root must be at most 100 characters long. Setup does not automatically launch the app with elevated permissions. Keep `runtime/`, `worker/`, DLLs, license notices, and the installed-mode marker intact.
 
 **Installation itself works offline.** Setup does not download additional runtimes. YouTube browsing, streaming, comments, downloads, and RYD count queries need internet access. The app's English/Korean/Japanese selection is separate from the English installer and does not change account or region settings.
 
 ### Updates and data
 
-- **Installed version:** Close FK_YT, run the newer installer, and select the **existing installation location**. Settings, sign-in information, history, resume positions, and files you added are preserved. Updating may be refused while the app is running. There is no automatic online updater.
-- **Portable version:** Close the app and keep the old folder as a backup. Extract the new ZIP into a separate empty folder, copy your preserved `data/` into the new `FK_YT/` folder, then launch it. When moving to the installed version, finish installation first and copy data while the app is closed.
+- **Installed version:** Close FK_YT before running a compatible newer machine installer as administrator and selecting the existing machine installation. The implementation preserves per-user profile data and user-added files; incompatible, modified, or running installations can be refused. Actual update behavior of this final revision remains unverified. There is no automatic online updater.
+- **Portable version:** Close the app and keep the old folder as a backup. Extract the new ZIP into a separate empty folder, copy your preserved `data/` into the new `FK_YT/` folder, then launch it.
+- **Moving from portable or an earlier per-user install:** Nothing is imported automatically. Close both apps, keep the original data, and copy it as the same Windows user into an **empty** `%LOCALAPPDATA%\FK_YT\data` after installation. Do not merge SQLite databases or overwrite a data folder already in use. Existing per-user apps, shortcuts, and data are left separate.
 - Sign-in data is tied to the Windows user. Moving to a different PC or Windows account may require reconnecting the session.
 
 ### What happens when I uninstall?
 
-Use Windows **Settings → Apps → FK_YT → Uninstall**, or run `Uninstall.exe`. By default, **settings, sign-in information, watch history, and resume positions are kept**. The `data/` folder is deleted only if you select `Also permanently delete this installation's data folder` and accept the additional confirmation. Added or modified files may remain. Downloads stored outside the app folder are separate.
+Use Windows **Settings → Apps → FK_YT → Uninstall**, **Uninstall FK_YT (System)** in Start Menu, or installed `Uninstall.exe`, and approve the administrator request. The machine uninstaller is designed to remove unchanged owned program files, shared shortcuts, and machine registration. **It always preserves every user's settings, sign-in information, watch history, resume positions, and downloads; there is no user-data deletion checkbox.** It does not search other user profiles. Added, modified, or locked program-folder files may remain. Actual removal of this final revision remains unverified.
 
-After a default uninstall, the folder containing retained `data/` is not automatically treated as an owned installation. To reinstall, preserve that data separately, install into an empty folder, close the app, and restore `data/`.
+To delete your own installed-app data separately, close FK_YT and remove your `%LOCALAPPDATA%\FK_YT\data` only after keeping anything you need. This also removes that profile's saved sign-in and history. Downloads saved elsewhere and data in earlier portable/per-user folders are separate. If modified or added files remain in Program Files after removal, preserve them and use an empty supported folder for reinstalling.
 
 ### File verification and download commands
 
-The final installer EXE is **unsigned (`NotSigned`)**. SmartScreen behavior after a real distribution download has not been tested, so no specific warning or wording is claimed. [SHA256SUMS.txt](SHA256SUMS.txt) covers the current installer EXE and portable ZIP. Compare it with `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.0-Setup-x64.exe'` in PowerShell. A checksum verifies matching bytes; it does not replace a code signature.
+The final installer EXE is **unsigned (`NotSigned`)**. SmartScreen behavior after a real distribution download has not been tested, so no specific warning or wording is claimed. Use the release's checksum inventory and the [file/hash table](docs/RELEASE-1.0.md#files-and-hashes). For example, run `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.0-Setup-x64.exe'` in PowerShell. A checksum verifies matching bytes; it does not replace a code signature.
 
-Use these commands **only after `v1.0` is published with the named assets attached**. The current private draft has neither the EXE nor the portable asset, so these are not working public download instructions today.
+Use these commands **after `v1.0` is published and public access to the named assets is confirmed**. They are prepared download instructions, not evidence of public availability today.
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
-gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0 portable.zip' --dir .\FK_YT-download
+gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0.portable.zip' --dir .\FK_YT-download
 # For the installer, use this instead of the portable download:
 gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.exe' --dir .\FK_YT-download
 ```
 
 ### For developers: repository builds and the final release differ
 
-**The GitHub app and worker code now include the same diagnostic-code removal as the final clean release.** Demo/smoke entry points and diagnostic-only files are removed; normal error handling and process cleanup are retained. See the [comparison scope and remaining documentation/packaging differences](docs/RELEASE-1.0.md#source-and-build-boundaries) against `1.0 source.zip`. Matching application code does not make the historical Bootstrap workflow reproduce the final media binaries.
+**The GitHub app and worker code include the portable release's diagnostic-code removal.** Demo/smoke entry points and diagnostic-only files are removed; normal error handling and process cleanup are retained. The administrator-installed DLL has an additional data-path change and has its own complete source archive, **`FK_YT-1.0-machine-app-source.zip`**. Use the [source/build boundaries](docs/RELEASE-1.0.md#source-and-build-boundaries) to select the matching source. The historical Bootstrap workflow does not reproduce the final media binaries.
 
-Compiling the current repository requires Git, **PowerShell 7**, and internet access. This example also uses GitHub CLI. If you have access to the private repository, authenticate with `gh auth login` when needed. Ordinary users do not need to build anything.
+Compiling the current repository requires Git, **PowerShell 7**, and internet access. This example also uses GitHub CLI; authenticate with `gh auth login` when needed. Ordinary users do not need to build anything.
 
 ```powershell
 gh repo clone mobsweeper/FK_YT
@@ -159,7 +164,7 @@ pwsh -NoProfile -File .\scripts\Build.ps1
 
 This prepares a project-local SDK and builds the app; it does not prepare all external playback tools. Full `Bootstrap.ps1` and `Bootstrap-Ffmpeg.ps1` prepare **historical supplier mpv/FFmpeg builds**, so they must not be used to restore the final clean runtime. `Publish.ps1` packages a prepared development runtime into a new self-contained directory beneath `dist/`; it does not create the final clean package, an NSIS installer, or a GitHub release.
 
-For the final app, use `release-1.0/BUILDING.txt` inside `1.0 source.zip`. Installer creation is separate: use `docs/BUILDING.md` inside `FK_YT-1.0-installer-source.zip`. Installer sources are not in this repository. These ZIPs have not been publicly released yet either.
+For the portable app, use `release-1.0/BUILDING.txt` inside **`1.0.source.zip`**. For the installed app DLL, use **`FK_YT-1.0-machine-app-source.zip` → `MACHINE-APP-BUILD.md`**. Installer creation is separate: use **`FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`**. Both installed-app and installer sources are supplied separately from this repository. Public access is pending publication.
 
 The repository has no C# test project, so `Build.ps1 -Test` is not an available instruction here. After diagnostic-code removal, a locked build using the existing SDK and local package cache passed with zero warnings/errors, and all 238 offline Python tests passed. Full Bootstrap downloads and actual app playback were not retested. Investigate download/hash failures rather than disabling verification.
 
@@ -197,7 +202,6 @@ See [Mozilla's profile-management guide](https://support.mozilla.org/en-US/kb/pr
 ## 8. Project layout
 
 ```text
-README.md               Repository landing page and language links
 readme_KR.md            Korean guide
 readme_EN.md            English guide
 assets/screenshots/    README screenshots with account details blurred
@@ -206,7 +210,7 @@ src/                    C# WPF app, player, account and storage services
 worker/                 Python workers and related tests
 scripts/                Development bootstrap, build, and local Publish
 dependencies.lock.json  Development tools and historical supplier runtime pins
-SHA256SUMS.txt          Current installer EXE and portable ZIP checksums
+SHA256SUMS.txt          Release asset checksums; check the stated inventory
 LICENSE                 MIT license for FK_YT's own code and documentation
 ```
 
@@ -256,9 +260,11 @@ The final mpv binary was built by FK_YT from the upstream commit with a build-id
 
 Corresponding source is prepared in **collections assembled by FK_YT**: `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, and `FK_YT_mpv-FFmpeg-part2.zip`. These collections are not official ZIP releases made by the upstream projects. The media files are **independent ZIPs**, not split volumes: get both and extract part1, then part2, into the **same folder**. Users do not need these source ZIPs to run the app.
 
-These source assets are currently attached only to a private draft. An actual public source location with access equal to the binaries has not been verified. The [distribution guide](docs/RELEASE-1.0.md) lists current filenames, hashes, legacy-notice mappings, and commands for use after publication. Original notices are preserved; the installer's `INSTALLER-SOURCE-ACCESS.txt` adds the current names and hashes.
+Binaries and matching source belong at the same [v1.0 release](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0); see the publication status above. The [distribution guide](docs/RELEASE-1.0.md) lists current hashes, archive mappings, and matching portable/installed-app sources. **`SOURCE-ACCESS.txt` and `LICENSES-SUPPLEMENT.txt`** accompany the release to add current source links and notices while retaining original legal texts.
 
-Bundled notices, actual binary configuration, and source-asset hashes have been cross-checked. **A complete bit-for-bit rebuild, complete recovery of certain historical dependency locks, and public source-access validation are not complete.** Some supplementary source-document links also need correction. Retaining notices is not a guarantee that every legal issue is resolved; remaining publication work is listed separately in the distribution guide.
+The source collections' distributor metadata and broken links were repaired, and six legal-notice files were added with their provenance recorded. Four macOS-only crate archives unused by the native Windows build were excluded; upstream cross-platform locks remain intact. Unrecoverable historical URL fields are explicitly marked unknown rather than guessed. Retained upstream source/legal entries and application code/build inputs were checked unchanged.
+
+**A complete bit-for-bit rebuild of all external binaries, recovery of the exact historical supplier librsvg lock, and public source-access validation are not complete.** The simd_helpers notice is a labelled upstream follow-up, not a claim that its original crate contained that file. See the distribution guide for the precise scope and remaining limits; these checks are not a legal certification.
 
 ## 12. Miscellaneous
 
