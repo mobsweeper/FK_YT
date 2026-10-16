@@ -2,9 +2,9 @@
 
 [한국어 안내](../readme_KR.md) · [English guide](../readme_EN.md) · [배포·검증 범위 / Distribution details](RELEASE-1.0.md)
 
-**FK_YT 자체 코드와 문서는 MIT입니다. 외부 구성요소에는 각각의 라이선스가 적용됩니다.** 이 문서는 배포 파일에 들어 있는 원문을 찾는 안내이며, 원래 저작권자나 라이선스를 바꾸지 않습니다. 기부나 별도 사용료 조건은 추가하지 않았습니다.
+**FK_YT 자체 코드와 문서는 MIT입니다. 외부 구성요소에는 각각의 라이선스가 적용됩니다.** 이 문서는 배포 파일에 들어 있는 원문을 찾는 안내이며, 원래 저작권자나 라이선스를 바꾸지 않습니다.
 
-**FK_YT's own code and documentation use MIT. Bundled third-party components retain their respective licenses.** This guide identifies the supplied notices and source collections; it does not replace or amend their original terms. No donation condition or additional usage fee is imposed by FK_YT.
+**FK_YT's own code and documentation use MIT. Bundled third-party components retain their respective licenses.** This guide identifies the supplied notices and source collections; it does not replace or amend their original terms.
 
 ## Original texts and scope
 

@@ -2,16 +2,16 @@
 
 Checked: **2026-10-16**. [한국어 사용 안내](../readme_KR.md) · [English user guide](../readme_EN.md)
 
-포터블과 Program Files 관리자 설치기의 **공개 배포는 보류 중이며 저장소·릴리스는 현재 비공개입니다.** 대응 소스·고지를 포함한 자산 12개의 업로드와 서버 크기·해시 대조는 완료했습니다. 공개 배포를 재개하기 전 실행 파일과 대응 소스의 공개 접근을 확인해야 합니다. 최종 설치기의 실제 설치·파일·등록·권한 검사는 확인했지만, 새 설치본 실행·재생·업데이트·실제 제거는 미검증입니다. 포터블 앱 소스와 설치형 앱 소스는 다릅니다.
+포터블과 Program Files 관리자 설치기를 **공개 배포했습니다.** 저장소·릴리스와 대응 소스·고지를 포함한 자산 12개의 로그인 없는 접근과 서버 크기·해시 일치를 확인했습니다. 최종 설치기의 실제 설치·파일·등록·권한 검사는 확인했지만, 새 설치본 실행·재생·업데이트·실제 제거는 미검증입니다. 포터블 앱 소스와 설치형 앱 소스는 다릅니다.
 
-Public distribution of the portable package and Program Files administrator installer is paused; the repository and release are currently private. The runnable EXE and portable ZIP are unchanged; source archives were separately repacked as described below. Uploads and server sizes/hashes for the 12 selected assets were checked. Public access to the binaries and matching sources remains a condition for resuming public distribution. The final installer's actual installation, files, registration, and permissions were checked locally; installed-app launch/playback, update, and actual removal of this revision remain unverified.
+The portable package and Program Files administrator installer are publicly released. The runnable EXE and portable ZIP are unchanged; source archives were separately repacked as described below. Anonymous access and matching server sizes/hashes were verified for all 12 selected assets, including corresponding sources and notices. The final installer's actual installation, files, registration, and permissions were checked locally; installed-app launch/playback, update, and actual removal of this revision remain unverified.
 
 ## Publication status
 
 <!-- PUBLICATION-STATUS-BEGIN -->
-**Currently private; public distribution paused.** Repository `mobsweeper/FK_YT` and [release `v1.0`](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0) require repository access. No current anonymous download or public corresponding-source availability is claimed.
+**Published October 16, 2026 at 09:28:40 UTC (18:28:40 KST).** Repository `mobsweeper/FK_YT` is public and [release `v1.0`](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0) is published. Repository/release API access and every asset download URL were verified without an Authorization header, cookies, GitHub CLI credentials, or browser session.
 
-The stored release contains nine binary/ZIP assets plus `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and `SHA256SUMS.txt`: **12 assets**. Uploaded server sizes/digests matched the selected local files and the repository checksum inventory. This establishes the stored assets, not current public access or a new full-file download/hash check for every large ZIP/EXE. See the [licensing record](LICENSING-1.0.md), [source-access map](SOURCE-ACCESS.txt), and [supplemental notices](LICENSES-SUPPLEMENT.txt).
+The release contains nine binary/ZIP assets plus `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and `SHA256SUMS.txt`: **12 assets**. All 12 URLs returned HTTP 206 to a first-byte Range GET, and anonymous API sizes/digests matched the selected local files and repository checksum inventory. The three notice/checksum text assets were also downloaded in full and their hashes checked. This is not a claim that every large ZIP/EXE was downloaded in full during the anonymous check. See the [licensing record](LICENSING-1.0.md), [source-access map](SOURCE-ACCESS.txt), and [supplemental notices](LICENSES-SUPPLEMENT.txt).
 <!-- PUBLICATION-STATUS-END -->
 
 ## Files and hashes
@@ -109,11 +109,11 @@ Original runtime/payload notices were preserved, so they still name earlier arch
 | `FK_YT-20261016-media-corresponding-source-1.zip` | `d5efb6f1a41da8bcc9c2c8b7248d8c5a0aaf62ab2fb016468d52015fab882560` | `FK_YT_mpv-FFmpeg-part1.zip` |
 | `FK_YT-20261016-media-corresponding-source-2.zip` | `8cd57af6917ff2582a0eae3a3fa778ab790e0580f176afe32f4350146709d478` | `FK_YT_mpv-FFmpeg-part2.zip` |
 
-Archived payload notices and input metadata can retain earlier source hashes and access-status snapshots from build time; they are not the current inventory or access status. The runnable binaries remain unchanged. The [source-access map](SOURCE-ACCESS.txt) and [supplemental notices](LICENSES-SUPPLEMENT.txt), also supplied as release assets, provide URLs, dotted filenames, hash mappings, and legal additions. Repaired source ZIPs have their own updated metadata and hashes; the supplements do not replace original copyright/license texts. The repository and release are currently private; public source access remains pending.
+Archived payload notices and input metadata can retain earlier source hashes and access-status snapshots from build time; they are not the current inventory or access status. The runnable binaries remain unchanged. The [source-access map](SOURCE-ACCESS.txt) and [supplemental notices](LICENSES-SUPPLEMENT.txt), also supplied as release assets, provide URLs, dotted filenames, hash mappings, and legal additions. Repaired source ZIPs have their own updated metadata and hashes; the supplements do not replace original copyright/license texts. Public access to the release and matching source assets has been verified as recorded above.
 
-### Getting the stored sources
+### Getting the published sources
 
-These commands use the `v1.0` tag and exact asset filenames. The matching source collections, both app-source variants, installer source, build payload, and notices are stored alongside the binaries. **The repository is private, so these commands and the release page currently require a signed-in account with repository access.** Public distribution must make the matching sources accessible alongside the binaries without an additional source-access fee; that public-access check remains pending.
+These commands use the published `v1.0` tag and exact asset filenames. The matching source collections, both app-source variants, installer source, build payload, and notices are publicly accessible alongside the binaries without an additional source-access fee. You can also download them directly from the release page without signing in.
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
@@ -173,9 +173,9 @@ The earlier repository comparison found all 68 shared `src/` and `worker/` files
 
 ## Publication verification and remaining checks
 
-자산 12개의 업로드·서버 해시 대조는 완료했으나 저장소·릴리스는 현재 비공개이며 공개 배포는 보류 중입니다. 실행용 EXE·포터블은 그대로이며, 소스 ZIP의 문서·출처·추가 고지는 위 범위에서 보완했습니다. 공개 접근 확인과 아래 런타임 미검증 범위는 별개입니다.
+공개와 비인증 접근·업로드 해시 확인은 완료했습니다. 실행용 EXE·포터블은 그대로이며, 소스 ZIP의 문서·출처·추가 고지는 위 범위에서 보완했습니다. 공개 접근 확인과 아래 런타임 미검증 범위는 별개입니다.
 
 1. Keep the **12 selected release assets** and the complete checksum inventory synchronized if any bytes change. The installed-app source must accompany the installed DLL; portable source alone does not describe that app change. Preserve original legal texts and the explicit source/reproducibility limits above.
-2. **Stored assets checked; public access pending:** server sizes/SHA-256 for all 12 selected `v1.0` assets matched the local files and repository checksum inventory. Before public distribution resumes, confirm the public repository/release and anonymous access to every binary, matching source archive, notice, and checksum asset. The current private release does not complete that check.
+2. **Completed:** the public repository, published `v1.0`, and all 12 asset URLs were checked without authentication; server sizes/SHA-256 matched the selected local files and repository checksum inventory. The three notice/checksum texts also passed full anonymous download/hash checks. The first-byte checks on larger assets establish public access and the recorded server metadata, not a new full-file download/hash test.
 3. Keep final installed-app launch/playback, real machine update/removal, and the uninstaller's initial Temp-copy ACL/access checks explicitly unverified until tested. The observed installer-Temp checks and earlier per-user lifecycle results do not complete them.
 4. Retain the untested clean Windows 11/no-system-runtime, alternate UAC account, SmartScreen, real GPU/audio, live account, disk-full and power-loss limits. Do not turn the existing Windows 10 development-PC checks into clean-machine proof.

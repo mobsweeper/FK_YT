@@ -17,7 +17,7 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 <!-- PUBLICATION-STATUS-BEGIN -->
 > **1.0 distribution status · checked October 16, 2026**
-> **Public distribution is paused.** The [repository and v1.0 release](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0) are currently private. The 12 selected assets were uploaded and their server sizes/hashes checked; public access to the binaries and matching sources must be confirmed before distribution resumes. The final installer passed local installation/file/permission checks; its installed-app launch/playback, update, and actual removal remain unverified. See the [files, hashes, and verification scope](docs/RELEASE-1.0.md) and [licensing record](docs/LICENSING-1.0.md).
+> **[FK_YT 1.0 is published](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0).** The repository and all 12 release assets, including matching source archives and notices, were verified accessible without authentication; server sizes/hashes matched the selected files. The final installer passed local installation/file/permission checks; its installed-app launch/playback, update, and actual removal remain unverified. See the [files, hashes, and verification scope](docs/RELEASE-1.0.md) and [licensing record](docs/LICENSING-1.0.md).
 <!-- PUBLICATION-STATUS-END -->
 
 ## 1. Language
@@ -108,7 +108,7 @@ Build-only tools are **.NET SDK 10.0.402**, **7zr 26.04** for extraction, and **
 
 **We recommend `1.0.portable.zip` for a straightforward setup.** Extract the whole archive into a new writable folder and run `FK_YT.exe` inside `FK_YT`; administrator permission is not needed there. The EXE installer verifies thousands of files and can take several minutes, with phase and file-count messages in its details view. **Both provide the same viewing/playback features and bundled runtime tools.** The installer adds machine-wide program installation, shared shortcuts, and Windows removal registration; its app DLL differs to keep data in each user's profile. Check the release checksum for either download.
 
-Files are stored at [FK_YT 1.0 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0). **The repository is currently private: access requires repository permission, and public distribution is paused.** `Code → Download ZIP` and `1.0.source.zip` are developer source downloads, not ready-to-run packages. GitHub normalizes spaces in asset names to dots; the unchanged runnable portable is `1.0.portable.zip`. Source archives were separately repacked to update publication documentation and notices, so use their current release hashes.
+Download from [FK_YT 1.0 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0); **browser downloads do not require signing in.** `Code → Download ZIP` and `1.0.source.zip` are developer source downloads, not ready-to-run packages. GitHub normalizes spaces in asset names to dots; the unchanged runnable portable is `1.0.portable.zip`. Source archives were separately repacked to update publication documentation and notices, so use their current release hashes.
 
 | Detail | Installer EXE | Portable ZIP |
 | --- | --- | --- |
@@ -140,7 +140,7 @@ To delete your own installed-app data separately, close FK_YT and remove your `%
 
 The final installer EXE is **unsigned (`NotSigned`)**. SmartScreen behavior after a real distribution download has not been tested, so no specific warning or wording is claimed. Use the release's checksum inventory and the [file/hash table](docs/RELEASE-1.0.md#files-and-hashes). For example, run `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.0-Setup-x64.exe'` in PowerShell. A checksum verifies matching bytes; it does not replace a code signature.
 
-These GitHub CLI commands download the stored `v1.0` assets. While the repository is private, they require a signed-in account with repository access; the release page has the same access requirement.
+These GitHub CLI commands download the published `v1.0` assets. You can also download them directly from the public release page without signing in.
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
@@ -153,7 +153,7 @@ gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.
 
 **The GitHub app and worker code include the portable release's diagnostic-code removal.** Demo/smoke entry points and diagnostic-only files are removed; normal error handling and process cleanup are retained. The administrator-installed DLL has an additional data-path change and has its own complete source archive, **`FK_YT-1.0-machine-app-source.zip`**. Use the [source/build boundaries](docs/RELEASE-1.0.md#source-and-build-boundaries) to select the matching source. The historical Bootstrap workflow does not reproduce the final media binaries.
 
-Compiling the current repository requires Git, **PowerShell 7**, and internet access. Cloning currently requires a GitHub account with access to the private repository. Ordinary users do not need to build anything.
+Compiling the current repository requires Git, **PowerShell 7**, and internet access. Cloning this public repository with Git does not require a GitHub sign-in. Ordinary users do not need to build anything.
 
 ```powershell
 git clone https://github.com/mobsweeper/FK_YT.git
@@ -164,7 +164,7 @@ pwsh -NoProfile -File .\scripts\Build.ps1
 
 This prepares a project-local SDK and builds the app; it does not prepare all external playback tools. Full `Bootstrap.ps1` and `Bootstrap-Ffmpeg.ps1` prepare **historical supplier mpv/FFmpeg builds**, so they must not be used to restore the final clean runtime. `Publish.ps1` packages a prepared development runtime into a new self-contained directory beneath `dist/`; it does not create the final clean package, an NSIS installer, or a GitHub release.
 
-For the portable app, use `release-1.0/BUILDING.txt` inside **`1.0.source.zip`**. For the installed app DLL, use **`FK_YT-1.0-machine-app-source.zip` → `MACHINE-APP-BUILD.md`**. Installer creation is separate: use **`FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`**. Both installed-app and installer sources are separate release assets stored alongside the binaries; public access remains pending.
+For the portable app, use `release-1.0/BUILDING.txt` inside **`1.0.source.zip`**. For the installed app DLL, use **`FK_YT-1.0-machine-app-source.zip` → `MACHINE-APP-BUILD.md`**. Installer creation is separate: use **`FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`**. Both installed-app and installer sources are separate release assets publicly accessible alongside the binaries.
 
 The repository has no C# test project, so `Build.ps1 -Test` is not an available instruction here. After diagnostic-code removal, a locked build using the existing SDK and local package cache passed with zero warnings/errors, and all 238 offline Python tests passed. Full Bootstrap downloads and actual app playback were not retested. Investigate download/hash failures rather than disabling verification.
 
@@ -258,13 +258,13 @@ See [yt-dlp's licensing explanation](https://github.com/yt-dlp/yt-dlp#licensing)
 
 The final mpv binary was built by FK_YT from the upstream commit with a build-identifying version-metadata change. FFmpeg is the MSYS2 UCRT64 build and its dependency cohort. These are not the historical shinchiro/Gyan binaries acquired by Bootstrap. Original and modification notices and build instructions are retained.
 
-Corresponding source is prepared in **collections assembled by FK_YT**: `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, and `FK_YT_mpv-FFmpeg-part2.zip`. These collections are not official ZIP releases made by the upstream projects. The media files are **independent ZIPs**, not split volumes: get both and extract part1, then part2, into the **same folder**. Users do not need these source ZIPs to run the app.
+Corresponding source is supplied in **collections assembled by FK_YT**: `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, and `FK_YT_mpv-FFmpeg-part2.zip`. These collections are not official ZIP releases made by the upstream projects. The media files are **independent ZIPs**, not split volumes: get both and extract part1, then part2, into the **same folder**. Users do not need these source ZIPs to run the app.
 
-Binaries and matching source are stored at the same [v1.0 release](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0), which is currently private. Public distribution must keep the matching source accessible alongside the binaries. The [distribution guide](docs/RELEASE-1.0.md) lists hashes and the matching portable/installed-app sources. The [licensing record](docs/LICENSING-1.0.md), [source-access map](docs/SOURCE-ACCESS.txt), and [supplemental notices](docs/LICENSES-SUPPLEMENT.txt) explain component terms, archive mappings, and remaining checks while retaining the original legal texts. The two text notices are also release assets.
+Binaries and matching source are publicly accessible at the same [v1.0 release](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0) without an additional source-access fee. Keep the matching source accessible alongside the binaries when redistributing. The [distribution guide](docs/RELEASE-1.0.md) lists hashes and the matching portable/installed-app sources. The [licensing record](docs/LICENSING-1.0.md), [source-access map](docs/SOURCE-ACCESS.txt), and [supplemental notices](docs/LICENSES-SUPPLEMENT.txt) explain component terms, archive mappings, and remaining checks while retaining the original legal texts. The two text notices are also release assets.
 
 The source collections' distributor metadata and broken links were repaired, and six legal-notice files were added with their provenance recorded. Four macOS-only crate archives unused by the native Windows build were excluded; upstream cross-platform locks remain intact. Unrecoverable historical URL fields are explicitly marked unknown rather than guessed. Retained upstream source/legal entries and application code/build inputs were checked unchanged.
 
-**A complete bit-for-bit rebuild of all external binaries and recovery of the exact historical supplier librsvg lock are not complete.** Public access to the matching source assets remains pending while the repository is private. The simd_helpers notice is a labelled upstream follow-up, not a claim that its original crate contained that file. See the licensing record and distribution guide for the precise scope and remaining limits; these checks are not a legal certification.
+**A complete bit-for-bit rebuild of all external binaries and recovery of the exact historical supplier librsvg lock are not complete.** Public access to the matching source assets has been verified. The simd_helpers notice is a labelled upstream follow-up, not a claim that its original crate contained that file. See the licensing record and distribution guide for the precise scope and remaining limits; these checks are not a legal certification.
 
 ## 12. Miscellaneous
 
