@@ -2,16 +2,16 @@
 
 Checked: **2026-10-16**. [한국어 사용 안내](../readme_KR.md) · [English user guide](../readme_EN.md)
 
-포터블과 Program Files 관리자 설치기를 준비했습니다. **공개 배포 준비 중이며 일반 사용자 접근은 아직 확인하지 않았습니다.** 최종 설치기의 실제 설치·파일·등록·권한 검사는 확인했지만, 새 설치본 실행·업데이트·실제 제거는 미검증입니다. 포터블 앱 소스와 설치형 앱 소스는 다릅니다.
+포터블과 Program Files 관리자 설치기의 **공개 배포는 보류 중이며 저장소·릴리스는 현재 비공개입니다.** 대응 소스·고지를 포함한 자산 12개의 업로드와 서버 크기·해시 대조는 완료했습니다. 공개 배포를 재개하기 전 실행 파일과 대응 소스의 공개 접근을 확인해야 합니다. 최종 설치기의 실제 설치·파일·등록·권한 검사는 확인했지만, 새 설치본 실행·재생·업데이트·실제 제거는 미검증입니다. 포터블 앱 소스와 설치형 앱 소스는 다릅니다.
 
-The portable package and Program Files administrator installer are prepared. The runnable EXE and portable ZIP are unchanged; source archives were separately repacked as described below. The final installer's actual installation, files, registration, and permissions were checked locally; installed-app launch/playback, update, and actual removal of this revision remain unverified.
+Public distribution of the portable package and Program Files administrator installer is paused; the repository and release are currently private. The runnable EXE and portable ZIP are unchanged; source archives were separately repacked as described below. Uploads and server sizes/hashes for the 12 selected assets were checked. Public access to the binaries and matching sources remains a condition for resuming public distribution. The final installer's actual installation, files, registration, and permissions were checked locally; installed-app launch/playback, update, and actual removal of this revision remain unverified.
 
 ## Publication status
 
-<!-- PUBLICATION-STATUS-BEGIN: replace this block only after final asset hashes and unauthenticated release access are verified. -->
-**Pending publication.** Repository `mobsweeper/FK_YT` is private and `v1.0` is a draft. All 12 selected assets are attached; their server-reported SHA-256 values and sizes match the selected local files. The repaired sources, `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and complete checksum inventory are included. This authenticated draft check does not establish public access.
+<!-- PUBLICATION-STATUS-BEGIN -->
+**Currently private; public distribution paused.** Repository `mobsweeper/FK_YT` and [release `v1.0`](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0) require repository access. No current anonymous download or public corresponding-source availability is claimed.
 
-The intended binary-and-source page is [FK_YT 1.0](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0). General-user access to that page and every matching asset must be checked after publication. The final set is nine binary/ZIP assets plus `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and `SHA256SUMS.txt`: **12 assets** in total.
+The stored release contains nine binary/ZIP assets plus `SOURCE-ACCESS.txt`, `LICENSES-SUPPLEMENT.txt`, and `SHA256SUMS.txt`: **12 assets**. Uploaded server sizes/digests matched the selected local files and the repository checksum inventory. This establishes the stored assets, not current public access or a new full-file download/hash check for every large ZIP/EXE. See the [licensing record](LICENSING-1.0.md), [source-access map](SOURCE-ACCESS.txt), and [supplemental notices](LICENSES-SUPPLEMENT.txt).
 <!-- PUBLICATION-STATUS-END -->
 
 ## Files and hashes
@@ -89,7 +89,7 @@ This does **not** establish clean-PC prerequisites, Windows 11 runtime qualifica
 
 ## Corresponding source and licenses
 
-FK_YT's own code and documentation use [MIT](../LICENSE). This does not relicense third-party software. The user guides summarize the actual licenses and their installed locations. `THIRD-PARTY-NOTICES.txt` and the original texts under `notices/` and each runtime folder remain the detailed component records.
+FK_YT's own code and documentation use [MIT](../LICENSE). This does not relicense third-party software. The user guides summarize the actual licenses and their installed locations; the [licensing record](LICENSING-1.0.md) distinguishes completed documentation/source work from remaining checks. `THIRD-PARTY-NOTICES.txt` and the original texts under `notices/` and each runtime folder remain the detailed component records.
 
 - Official upstream yt-dlp EXE **2026.08.19** is retained. Its PyInstaller combined distribution is GPLv3-or-later; the separate Python wheel **2026.8.19** is Unlicense. Python inside the EXE is **3.10.11**, not worker Python **3.13.16**. See [upstream's explanation](https://github.com/yt-dlp/yt-dlp#licensing).
 - mpv **0.41.0-dev-gec38361c56-fkyt** was built by FK_YT from commit `ec38361c56b2d91e417c4c3e58184535d1a1aa2e`. Its source modification identifies the build in version metadata; retained build controls also avoid personal build paths. Original functionality was not represented as FK_YT's authorship. Patches and modification notices remain in the media source collection.
@@ -101,7 +101,7 @@ FK_YT's own code and documentation use [MIT](../LICENSE). This does not relicens
 
 ### Legacy notice mapping
 
-Original runtime/payload notices were preserved, so they still name earlier archives. The current source collections were **repacked**, not merely renamed; their SHA-256 values changed again during publication repair. Use the current hashes in “Files and hashes” above and the release's **`SOURCE-ACCESS.txt`** for the complete archive mapping. The installed `INSTALLER-SOURCE-ACCESS.txt` remains its build-time snapshot rather than the current release inventory.
+Original runtime/payload notices were preserved, so they still name earlier archives. The current source collections were **repacked**, not merely renamed; their SHA-256 values changed again during publication repair. Use the current hashes in “Files and hashes” above and the [source-access map](SOURCE-ACCESS.txt) for the complete archive mapping. The installed `INSTALLER-SOURCE-ACCESS.txt` remains its build-time snapshot rather than the current release inventory.
 
 | Legacy filename in unchanged payload notices | Legacy SHA-256 | Current asset |
 | --- | --- | --- |
@@ -109,16 +109,16 @@ Original runtime/payload notices were preserved, so they still name earlier arch
 | `FK_YT-20261016-media-corresponding-source-1.zip` | `d5efb6f1a41da8bcc9c2c8b7248d8c5a0aaf62ab2fb016468d52015fab882560` | `FK_YT_mpv-FFmpeg-part1.zip` |
 | `FK_YT-20261016-media-corresponding-source-2.zip` | `8cd57af6917ff2582a0eae3a3fa778ab790e0580f176afe32f4350146709d478` | `FK_YT_mpv-FFmpeg-part2.zip` |
 
-Archived payload notices and input metadata can retain the **private/draft state and earlier source hashes from build time**. The runnable binaries remain unchanged. Release-side **`SOURCE-ACCESS.txt`** and **`LICENSES-SUPPLEMENT.txt`** provide the current URLs, dotted filenames, hash mappings, and legal additions. Repaired source ZIPs have their own updated metadata and hashes; the supplements do not replace original copyright/license texts or establish public access before it is checked.
+Archived payload notices and input metadata can retain earlier source hashes and access-status snapshots from build time; they are not the current inventory or access status. The runnable binaries remain unchanged. The [source-access map](SOURCE-ACCESS.txt) and [supplemental notices](LICENSES-SUPPLEMENT.txt), also supplied as release assets, provide URLs, dotted filenames, hash mappings, and legal additions. Repaired source ZIPs have their own updated metadata and hashes; the supplements do not replace original copyright/license texts. The repository and release are currently private; public source access remains pending.
 
-### Getting the sources after publication
+### Getting the stored sources
 
-These commands use the real intended tag and exact filenames. **They are conditional instructions, not proof that a public download exists today.** Before running them, the published release and your access must be confirmed. Source access must accompany access to the corresponding binaries without an additional source-access fee.
+These commands use the `v1.0` tag and exact asset filenames. The matching source collections, both app-source variants, installer source, build payload, and notices are stored alongside the binaries. **The repository is private, so these commands and the release page currently require a signed-in account with repository access.** Public distribution must make the matching sources accessible alongside the binaries without an additional source-access fee; that public-access check remains pending.
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
 gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT_yt-dlp.zip' --pattern 'FK_YT_mpv-FFmpeg-part1.zip' --pattern 'FK_YT_mpv-FFmpeg-part2.zip' --pattern 'SOURCE-ACCESS.txt' --pattern 'LICENSES-SUPPLEMENT.txt' --pattern 'SHA256SUMS.txt' --dir .\FK_YT-sources
-# Application and installer sources, once attached:
+# Application/installer sources and the exact installer build payload:
 gh release download v1.0 --repo mobsweeper/FK_YT --pattern '1.0.source.zip' --pattern 'FK_YT-1.0-machine-app-source.zip' --pattern 'FK_YT-1.0-installer-source.zip' --pattern 'machine-public-payload.zip' --dir .\FK_YT-sources
 ```
 
@@ -171,11 +171,11 @@ The installer-source publication repack changes only its build guide, active inp
 
 The earlier repository comparison found all 68 shared `src/` and `worker/` files identical to the **portable** source after diagnostic removal. Its locked Release build passed with zero warnings/errors, and 238 offline Python tests passed. The installed-app production source previously rebuilt the expected DLL hash `d09ef13fce3029a8943ddd149eeb770dde024543276fe8e7ab98a200111723d6`; app EXE/DLL/deps/runtimeconfig also matched repeat builds in different paths. The current app-source publication repacks preserve **102 portable and 106 installed-app code/build-input files** and original legal texts, with ZIP CRC and exact manifests checked; they were not another app rebuild or launch. This does not mean every third-party runtime was rebuilt byte-for-byte. There is no C# test project in the repository; `Build.ps1 -Test` is not a working instruction here. Historical Publish output is not the curated final user distribution.
 
-## Publication checks and verification limits
+## Publication verification and remaining checks
 
-공개 전 접근 확인과 런타임 미검증 범위를 구분합니다. 실행용 EXE·포터블은 그대로이며, 공개 소스 ZIP의 문서·출처·추가 고지는 위 범위에서 보완했습니다.
+자산 12개의 업로드·서버 해시 대조는 완료했으나 저장소·릴리스는 현재 비공개이며 공개 배포는 보류 중입니다. 실행용 EXE·포터블은 그대로이며, 소스 ZIP의 문서·출처·추가 고지는 위 범위에서 보완했습니다. 공개 접근 확인과 아래 런타임 미검증 범위는 별개입니다.
 
 1. Keep the **12 selected release assets** and the complete checksum inventory synchronized if any bytes change. The installed-app source must accompany the installed DLL; portable source alone does not describe that app change. Preserve original legal texts and the explicit source/reproducibility limits above.
-2. After publication, verify **unauthenticated** access to `v1.0`, the binary downloads, both app-source variants, installer source, the supplied machine payload, all three third-party source collections, and supplemental notices/checksums. Replace each `PUBLICATION-STATUS` block in these three guides with the confirmed result. Authenticated draft inspection is not that check.
+2. **Stored assets checked; public access pending:** server sizes/SHA-256 for all 12 selected `v1.0` assets matched the local files and repository checksum inventory. Before public distribution resumes, confirm the public repository/release and anonymous access to every binary, matching source archive, notice, and checksum asset. The current private release does not complete that check.
 3. Keep final installed-app launch/playback, real machine update/removal, and the uninstaller's initial Temp-copy ACL/access checks explicitly unverified until tested. The observed installer-Temp checks and earlier per-user lifecycle results do not complete them.
 4. Retain the untested clean Windows 11/no-system-runtime, alternate UAC account, SmartScreen, real GPU/audio, live account, disk-full and power-loss limits. Do not turn the existing Windows 10 development-PC checks into clean-machine proof.

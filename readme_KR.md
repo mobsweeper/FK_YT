@@ -15,9 +15,9 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 *계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
 
-<!-- PUBLICATION-STATUS-BEGIN: 비인증 릴리스 접근 확인 후에만 이 블록을 교체합니다. -->
+<!-- PUBLICATION-STATUS-BEGIN -->
 > **1.0 배포 현황 · 2026-10-16 확인**
-> 포터블 ZIP과 관리자 설치기를 준비했습니다. 공개 준비 중이며 현재 저장소는 **비공개**, `v1.0`은 **드래프트**입니다. 일반 사용자의 다운로드·대응 소스 접근은 아직 확인하지 않았습니다. 최종 설치기의 실제 설치·파일·권한 검사는 통과했으나, 새 설치본 실행·업데이트·실제 제거는 미검증입니다. [파일·해시·검증 범위](docs/RELEASE-1.0.md)를 확인해 주세요.
+> **공개 배포는 보류 중입니다.** [저장소와 v1.0 릴리스](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0)는 현재 비공개입니다. 선정한 자산 12개의 업로드와 서버 크기·해시 대조는 완료했으며, 배포 재개 전 실행 파일과 대응 소스의 공개 접근을 확인해야 합니다. 최종 설치기의 실제 설치·파일·권한 검사는 통과했으나, 새 설치본 실행·재생·업데이트·실제 제거는 미검증입니다. [파일·해시·검증 범위](docs/RELEASE-1.0.md)와 [라이선스 점검 기록](docs/LICENSING-1.0.md)을 확인해 주세요.
 <!-- PUBLICATION-STATUS-END -->
 
 ## 1. 언어 선택
@@ -108,7 +108,7 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 **간단하게 쓰려면 `1.0.portable.zip`을 권장합니다.** 쓰기 가능한 새 폴더에 전부 압축을 풀고 `FK_YT` 안의 `FK_YT.exe`를 실행하면 되며, 이 경우 관리자 권한이 필요 없습니다. EXE 설치기는 수천 개 파일을 검증하므로 몇 분 걸릴 수 있고, 상세 화면에 단계·파일 개수를 표시합니다. **두 방식의 탐색·재생 기능과 포함된 실행 도구는 같습니다.** 설치형은 시스템 공용 프로그램 설치·바로가기·Windows 제거 등록을 추가하고, 데이터는 사용자 프로필에 저장하도록 앱 DLL이 다릅니다. 어느 파일을 받든 배포 해시를 확인하세요.
 
-다운로드 위치는 [GitHub Releases의 FK_YT 1.0](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0)이며, 위 배포 상태에서 게시 확인 후 사용하세요. `Code → Download ZIP`과 `1.0.source.zip`은 실행 패키지가 아닌 개발용 소스입니다. GitHub 자산은 공백이 점으로 바뀌므로, 바뀌지 않은 실행용 포터블의 배포명은 `1.0.portable.zip`입니다. 소스 ZIP은 공개 문서·고지를 보완해 별도로 재패키징했으므로 현재 릴리스 해시를 확인하세요.
+파일은 [GitHub Releases의 FK_YT 1.0](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0)에 보관되어 있습니다. **현재 비공개이므로 저장소 접근 권한이 필요하며, 공개 배포는 보류 중입니다.** `Code → Download ZIP`과 `1.0.source.zip`은 실행 패키지가 아닌 개발용 소스입니다. GitHub 자산은 공백이 점으로 바뀌므로, 바뀌지 않은 실행용 포터블의 배포명은 `1.0.portable.zip`입니다. 소스 ZIP은 공개 문서·고지를 보완해 별도로 재패키징했으므로 현재 릴리스 해시를 확인하세요.
 
 | 구분 | 설치형 EXE | 포터블 ZIP |
 | --- | --- | --- |
@@ -140,7 +140,7 @@ Windows **설정 → 앱 → FK_YT → 제거**, 시작 메뉴의 **Uninstall FK
 
 최종 설치 EXE는 **코드 서명 없음(`NotSigned`)**으로 확인했습니다. 실제 배포 다운로드 후의 SmartScreen 경고 유무·문구는 시험하지 않았으므로 특정 경고가 반드시 뜬다고 단정하지 않습니다. 릴리스의 해시 목록과 [파일·해시 표](docs/RELEASE-1.0.md#files-and-hashes)를 사용하세요. 예를 들어 PowerShell에서 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.0-Setup-x64.exe'`로 비교할 수 있습니다. 해시는 파일 일치 확인용이며 코드 서명을 대신하지는 않습니다.
 
-아래 명령은 **`v1.0` 게시 후 해당 파일의 공개 접근까지 확인했을 때** 사용합니다. 공개 후를 위한 안내이며, 현재 공개 다운로드의 증거는 아닙니다.
+아래 GitHub CLI 명령으로 보관된 `v1.0` 파일을 받습니다. 저장소가 비공개인 동안에는 저장소 접근 권한이 있는 계정으로 로그인해야 하며, 릴리스 페이지도 같은 권한이 필요합니다.
 
 ```powershell
 gh release view v1.0 --repo mobsweeper/FK_YT
@@ -153,10 +153,10 @@ gh release download v1.0 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.0-Setup-x64.
 
 **GitHub 앱·작업자 코드에는 포터블 배포본과 같은 진단 코드 제거를 반영했습니다.** 데모·스모크 실행 경로와 진단 전용 파일을 제거했으며, 일반 오류 처리와 프로세스 정리는 유지했습니다. 관리자 설치형 DLL에는 데이터 경로 변경이 추가되어 있으므로 완전한 별도 소스 **`FK_YT-1.0-machine-app-source.zip`**을 사용합니다. 소스 선택과 비교 범위는 [배포 안내](docs/RELEASE-1.0.md#source-and-build-boundaries)에 구분했습니다. 예전 Bootstrap이 최종 미디어 바이너리를 재현하는 것은 아닙니다.
 
-현재 저장소의 앱을 컴파일하려면 Git, **PowerShell 7**, 인터넷이 필요합니다. 다음 예제는 GitHub CLI도 사용하며 필요하면 `gh auth login`으로 로그인합니다. 일반 사용자는 이 과정을 할 필요가 없습니다.
+현재 저장소의 앱을 컴파일하려면 Git, **PowerShell 7**, 인터넷이 필요합니다. 현재 비공개 저장소를 복제하려면 접근 권한이 있는 GitHub 계정이 필요합니다. 일반 사용자는 이 과정을 할 필요가 없습니다.
 
 ```powershell
-gh repo clone mobsweeper/FK_YT
+git clone https://github.com/mobsweeper/FK_YT.git
 Set-Location FK_YT
 pwsh -NoProfile -File .\scripts\Bootstrap.ps1 -Component Dotnet
 pwsh -NoProfile -File .\scripts\Build.ps1
@@ -164,7 +164,7 @@ pwsh -NoProfile -File .\scripts\Build.ps1
 
 이 명령은 프로젝트 내부에 SDK를 준비하고 앱을 빌드합니다. 실행용 외부 도구를 전부 준비하는 명령은 아닙니다. `Bootstrap.ps1`의 전체 실행과 `Bootstrap-Ffmpeg.ps1`은 **예전 공급사 mpv·FFmpeg**를 준비하므로 최종 clean 런타임 복원용으로 사용하면 안 됩니다. `Publish.ps1`은 준비된 개발용 런타임으로 새 `dist/` 하위 폴더에 self-contained 실행 폴더를 만들지만, 최종 clean 패키지·NSIS 설치기·GitHub 릴리스를 만들지는 않습니다.
 
-포터블 앱은 **`1.0.source.zip` → `release-1.0/BUILDING.txt`**, 설치형 앱 DLL은 **`FK_YT-1.0-machine-app-source.zip` → `MACHINE-APP-BUILD.md`**를 따릅니다. 설치기 제작은 별도 **`FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`**를 사용합니다. 설치형 앱·설치기 소스는 이 저장소와 별도이며, 공개 접근은 릴리스 게시 후 확인해야 합니다.
+포터블 앱은 **`1.0.source.zip` → `release-1.0/BUILDING.txt`**, 설치형 앱 DLL은 **`FK_YT-1.0-machine-app-source.zip` → `MACHINE-APP-BUILD.md`**를 따릅니다. 설치기 제작은 별도 **`FK_YT-1.0-installer-source.zip` → `docs/BUILDING.md`**를 사용합니다. 설치형 앱·설치기 소스는 이 저장소와 별도인 릴리스 첨부로 실행 파일과 같은 위치에 보관되어 있으며, 공개 접근 확인은 남아 있습니다.
 
 현재 저장소에는 C# 테스트 프로젝트가 없으므로 `Build.ps1 -Test`를 안내하지 않습니다. 진단 코드 제거 후 기존 SDK와 로컬 패키지 캐시를 사용한 잠금 빌드는 경고·오류 없이 통과했고, Python 오프라인 테스트 238개도 통과했습니다. 전체 Bootstrap 다운로드나 실제 앱 재생을 다시 시험한 것은 아닙니다. 다운로드·해시 검증 실패를 검증 해제로 넘기지 마세요.
 
@@ -260,11 +260,11 @@ yt-dlp 소스와 번들 EXE의 구분은 [프로젝트의 라이선스 설명](h
 
 대응 소스는 **FK_YT에서 준비한 모음**인 `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, `FK_YT_mpv-FFmpeg-part2.zip`으로 제공할 준비가 되어 있습니다. 각 프로젝트가 직접 배포한 공식 ZIP이라는 뜻은 아닙니다. 미디어 두 파일은 분할 압축 볼륨이 아닌 **독립 ZIP**이므로 둘 다 받아 **같은 폴더에 part1 → part2 순서로** 풉니다. 앱 실행에는 이 소스 ZIP이 필요하지 않습니다.
 
-바이너리와 대응 소스는 같은 [v1.0 릴리스](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0)에 함께 두며, 접근 확인 상태는 위 배포 상태를 따릅니다. [배포 안내](docs/RELEASE-1.0.md)에 현재 해시·이전 고지 대응 관계와 포터블·설치형 각각의 앱 소스를 적었습니다. **`SOURCE-ACCESS.txt`와 `LICENSES-SUPPLEMENT.txt`**는 원래 법적 고지를 보존하면서 현재 소스 주소와 추가 고지를 함께 안내하는 릴리스 첨부입니다.
+바이너리와 대응 소스는 현재 비공개인 같은 [v1.0 릴리스](https://github.com/mobsweeper/FK_YT/releases/tag/v1.0)에 보관되어 있습니다. 공개 배포 시에는 실행 파일과 대응 소스를 함께 접근할 수 있어야 합니다. [배포 안내](docs/RELEASE-1.0.md)에 해시와 포터블·설치형 각각의 앱 소스를 적었습니다. [라이선스 점검 기록](docs/LICENSING-1.0.md), [소스 접근·파일 대응표](docs/SOURCE-ACCESS.txt), [추가 라이선스 고지](docs/LICENSES-SUPPLEMENT.txt)에서 구성 요소별 조건·압축 파일 대응 관계·남은 확인 사항을 안내하며, 원래 법적 고지는 보존합니다. 두 텍스트 고지는 릴리스에도 첨부되어 있습니다.
 
 소스 모음의 배포자 메타데이터·깨진 링크를 복구하고 출처를 기록한 법적 고지 파일 6개를 추가했습니다. native Windows 빌드에 쓰이지 않는 macOS 전용 crate ZIP 4개는 제외했으며, 플랫폼 공통 upstream 잠금 파일은 그대로 보존합니다. 복구 근거가 없는 과거 URL은 추측하지 않고 미확보로 명시했습니다. 유지한 upstream 소스·법적 고지와 앱 코드·빌드 입력이 바뀌지 않았는지도 대조했습니다.
 
-**전체 외부 바이너리의 동일 바이트 재빌드, 공급사의 정확한 과거 librsvg 잠금 파일 복원, 공개 소스 접근 검증은 완료하지 않았습니다.** simd_helpers 고지는 upstream의 후속 고지임을 표시했으며 원래 crate에 들어 있던 파일이라고 주장하지 않습니다. 정확한 범위와 남은 한계는 배포 안내에 구분했으며, 이 점검이 법적 적합성 보증을 뜻하지는 않습니다.
+**전체 외부 바이너리의 동일 바이트 재빌드와 공급사의 정확한 과거 librsvg 잠금 파일 복원은 완료하지 않았습니다.** 현재 비공개 상태이므로 대응 소스의 공개 접근 확인도 남아 있습니다. simd_helpers 고지는 upstream의 후속 고지임을 표시했으며 원래 crate에 들어 있던 파일이라고 주장하지 않습니다. 정확한 범위와 남은 한계는 라이선스 점검 기록과 배포 안내에 구분했으며, 이 점검이 법적 적합성 보증을 뜻하지는 않습니다.
 
 ## 12. 기타
 

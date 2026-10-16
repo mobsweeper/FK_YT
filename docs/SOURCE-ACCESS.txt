@@ -1,0 +1,83 @@
+FK_YT 1.0 - source access and publication supplement
+
+Release location: https://github.com/mobsweeper/FK_YT/releases/tag/v1.0
+This release page is the distribution location for the selected binaries and
+matching source collections. Its current visibility determines download access;
+this file is a source/version mapping, not a live availability check. Source
+access must accompany binary access without an extra source-access fee. The
+repository guides record the current distribution and verification status.
+
+FK_YT code/documents use MIT. Third-party components retain their respective
+licenses. Original notices and license texts in the portable and installer
+payloads are preserved. Read LICENSES-SUPPLEMENT.txt beside these files too.
+Source access has no additional fee and is provided alongside the binaries.
+
+User downloads: 1.0.portable.zip (recommended) or FK_YT-1.0-Setup-x64.exe.
+The following source archives are collections prepared by FK_YT. They are not
+official upstream releases under these filenames.
+
+1.0.source.zip
+SHA-256: 862379cad447100962d2161d87205327b5b4f500d5bc4e5fe107b188a7564c35
+Bytes: 564599
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/1.0.source.zip
+
+FK_YT-1.0-machine-app-source.zip
+SHA-256: 17df8c037cf2906c997d5753b88a521320649b8c8a8e09a7ae26e13b104f83e9
+Bytes: 581075
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/FK_YT-1.0-machine-app-source.zip
+
+FK_YT_yt-dlp.zip
+SHA-256: e22f4df8dcb40205dc9b2b2ade373a6d6f3d3e5adab786b36f628999504c8ab2
+Bytes: 165234763
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/FK_YT_yt-dlp.zip
+Previously packaged under the same public name: 29271824515a7ca05ac74d236b7a4d23e6cced9ba76f65974f7993f105791c47
+Legacy name in unchanged payload notices: yt-dlp-2026.08.19-corresponding-source.zip
+Legacy SHA-256: 79b63a0324dbc4202ef1cf90cd46372f29d414d0c335669eb7a77e7398b380f1
+
+FK_YT_mpv-FFmpeg-part1.zip
+SHA-256: b53ab130c5f1102874f7edbdfc49b0baa30fa1eb1251ad476e9e3624512c4129
+Bytes: 1608074669
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/FK_YT_mpv-FFmpeg-part1.zip
+Previously packaged under the same public name: b37fad3902adbd1e12fdd78e390af108c50ebb170207af07c2a7edcbfc493928
+Legacy name in unchanged payload notices: FK_YT-20261016-media-corresponding-source-1.zip
+Legacy SHA-256: d5efb6f1a41da8bcc9c2c8b7248d8c5a0aaf62ab2fb016468d52015fab882560
+
+FK_YT_mpv-FFmpeg-part2.zip
+SHA-256: 5f499d855e975df0f8c72e0e2a3d3949b13f8f121a9c241273ca2b1c0337cc53
+Bytes: 118680866
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/FK_YT_mpv-FFmpeg-part2.zip
+Previously packaged under the same public name: 7c45ffe820565ae35c4733b4093d8e0b56341e74fe09f3c56ee61faaba66d8fc
+Legacy name in unchanged payload notices: FK_YT-20261016-media-corresponding-source-2.zip
+Legacy SHA-256: 8cd57af6917ff2582a0eae3a3fa778ab790e0580f176afe32f4350146709d478
+
+1.0.source.zip is the portable application source. The separate machine app
+source includes the installed-mode data path. Installer source and exact build
+input are also at the same release location:
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/FK_YT-1.0-installer-source.zip
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/machine-public-payload.zip
+All final asset hashes, including the installer source itself, are listed in:
+https://github.com/mobsweeper/FK_YT/releases/download/v1.0/SHA256SUMS.txt
+
+The two mpv/FFmpeg archives are INDEPENDENT ZIP files, not split volumes.
+Download both and extract part1 followed by part2 into the same new folder.
+The common source README/index files are identical.
+
+Publication repack: application/installer executable source is unchanged.
+Application source documents were reduced to public build guidance. Media
+distributor metadata and reconstruction helper URLs were repaired, and missing
+legal texts recovered where supported by upstream evidence. Original retained
+source archives, patches, and legal texts were not edited. Four macOS-only
+crates with unresolved standalone notice evidence are omitted from this
+Windows-focused collection; lockfiles retain cross-platform entries and the
+collection is not a complete offline all-target Cargo source set.
+
+The exact historical supplier librsvg Cargo.lock was not captured. The
+reconstructed lock is labelled as reconstructed, and unrecoverable historical
+origin URL fields are explicitly unknown rather than invented. Full-cohort
+byte-identical rebuilding and independent supplier GPG verification have not
+been established. See PUBLICATION-CHANGES.txt and source indexes in each ZIP.
+
+Earlier SOURCE-ACCESS and INSTALLER-SOURCE-ACCESS files embedded in unchanged
+binaries describe a private/draft build snapshot and older archive hashes.
+This release-side supplement supplies current names, mappings and locations;
+it does not alter those original files or claim that the binary was rebuilt.
