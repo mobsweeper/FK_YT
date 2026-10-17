@@ -51,6 +51,7 @@ public partial class MainWindow
     private async Task<bool> ReloadChannelsAsync(bool duringTransition=false)
     {
         if(!_session.IsConnected || _settings.Incognito || _channelReloadBusy || _closing || (!duringTransition && AccountWorkBlocked))return false;
+        _historyAccountValidated=false;
         _channelReloadBusy=true;_channelReloadError=null;UpdateAccountControls();UpdateSessionLabel();SetStatus(()=>UiText.T("YouTube 채널 목록을 확인하는 중…","Checking YouTube channels…","YouTube チャンネルを確認中…"));
         try
         {
@@ -74,13 +75,14 @@ public partial class MainWindow
         }
         catch(Exception ex)when(IsStorageError(ex) || ex is InvalidDataException or JsonException or Win32Exception or OperationCanceledException)
         {if(!_closing)SetChannelReloadError(()=>UiText.T("채널 목록을 확인하지 못했습니다. 로그인 연결 또는 채널 목록을 갱신하세요.","Could not check channels. Reconnect your account or refresh the channel list.","チャンネルを確認できませんでした。ログイン接続またはチャンネル一覧を更新してください。"));DisplaySelectedChannel();}
-        finally{_channelUiUpdating=false;_channelReloadBusy=false;UpdateAccountControls();UpdateSessionLabel();}
+        finally{_channelUiUpdating=false;_channelReloadBusy=false;UpdateAccountControls();UpdateSessionLabel();StartHistoryOutboxWorker();RefreshHistoryOutboxUi();}
         return false;
     }
     private Task ApplyChannelAsync(YouTubeChannel channel)=>ApplyChannelCoreAsync(channel,null);
     private async Task ApplyChannelCoreAsync(YouTubeChannel channel,YouTubeChannel? original)
     {
         _store.EnsureSettingsWritable();
+        if(channel.Id!=_settings.SelectedChannelId)PauseHistoryOutbox();
         await ResetAccountAsync();
         var token=_accountCts.Token;
         await PersistSessionChangeAsync(async()=>
@@ -94,6 +96,7 @@ public partial class MainWindow
             _settings.AccountKey=key;
         });
         _channelReloadError=null;_qualityKey="";_lastSavedKey="";
+        _historyAccountValidated=true;
         UpdateSessionLabel();SetStatus(()=>UiText.F("{0} 채널로 연결되었습니다.","Connected to channel {0}.","{0} チャンネルに接続しました。",channel.Name));
     }
     private async void ReloadChannels_Click(object sender,RoutedEventArgs e)

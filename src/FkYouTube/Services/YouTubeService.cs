@@ -175,28 +175,17 @@ public sealed class YouTubeService
     }
     public async Task<bool> MarkWatchedAsync(string url,CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if(!TryVideoUrl(url,out _,out var canonical) || !_session.IsConnected)return false;
         using var lease=_session.Acquire();var channel=_session.SelectedChannel;
         var args=BaseArguments(lease.Path,channel);
-        args.AddRange(["--no-write-comments","--simulate","--mark-watched",canonical]);
-        return await RetryMarkWatchedAsync(()=>RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(60),ct,lease:lease),ct,
-            (attempt,token)=>Task.Delay(TimeSpan.FromSeconds(attempt==0?5:15),token));
-    }
-    internal static async Task<bool> RetryMarkWatchedAsync(Func<Task<CommandResult>> run,CancellationToken ct,Func<int,CancellationToken,Task> delay)
-    {
-        for(var attempt=0;attempt<3;attempt++)
-        {
-            ct.ThrowIfCancellationRequested();
-            try
-            {
-                var result=await run();
-                if(result.ExitCode==0 && !result.Error.Contains("Unable to mark",StringComparison.OrdinalIgnoreCase) && result.Output.Contains("Marking",StringComparison.OrdinalIgnoreCase))return true;
-            }
-            catch(IOException ex)when(ex.InnerException is TimeoutException && !ct.IsCancellationRequested)
-            {if(attempt==2)return false;}
-            if(attempt<2)await delay(attempt,ct);
-        }
-        return false;
+        // A timed-out write may already have reached YouTube. Do not replay it,
+        // including through yt-dlp's shared extraction/download retry settings.
+        args.AddRange(["--retries","0","--extractor-retries","0","--no-write-comments","--simulate","--mark-watched",canonical]);
+        var result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(60),ct,lease:lease);
+        ct.ThrowIfCancellationRequested();
+        if(result.ExitCode==0 && !result.Error.Contains("Unable to mark",StringComparison.OrdinalIgnoreCase) && result.Output.Contains("Marking",StringComparison.OrdinalIgnoreCase))return true;
+        throw new YouTubeAccessException(ProcessRunner.ClassifyError(result.Error),lease.Path is not null);
     }
 
     public async Task<IReadOnlyList<int>> GetResolutionsAsync(string url,CancellationToken ct,bool incognito=false)

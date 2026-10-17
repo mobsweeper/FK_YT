@@ -97,6 +97,7 @@ public partial class MainWindow
         try
         {
             // Drain/cancel the old account's work before admitting any private playback.
+            if(enabled)PauseHistoryOutbox();
             await ResetAccountAsync();
             _settings.Incognito=enabled;_qualityKey="";_lastSavedKey="";
             Controls.ThumbnailImage.Cache?.SetPrivateMode(enabled);
@@ -109,7 +110,7 @@ public partial class MainWindow
             if(!saved)SetStatus(()=>UiText.T("시크릿 모드 변경은 현재 실행에 적용했습니다. 설정 파일 저장은 실패했으므로 다음 실행 때 다시 확인해 주세요.","Incognito mode was changed for this session. Settings could not be saved; check the mode again next time.","シークレットモードの変更を今回の起動中に適用しました。設定の保存に失敗したため、次回起動時にもう一度確認してください。"));
         }
         catch(OperationCanceledException)when(_closing){}
-        catch(Exception error)when(IsStorageError(error) || error is InvalidOperationException)
+        catch(Exception error)when(IsStorageError(error) || error is InvalidOperationException or InvalidDataException)
         {SetStatus(()=>UiText.T("모드 전환을 완료하지 못했습니다. 현재 적용된 모드 표시를 유지합니다. 저장소 또는 팝아웃 상태를 확인해 주세요.","Could not finish switching modes. The active mode is still shown. Check storage or the popout window.","モードの切り替えを完了できませんでした。現在適用されているモードの表示を維持します。保存先または別ウィンドウの状態を確認してください。"));}
         finally{IncognitoCheck.IsChecked=_settings.Incognito;SetAccountBusy(false);UpdateSessionLabel();}
         if(openHome && !AccountWorkBlocked && !_settings.Incognito)await OpenFeedAsync("home",UiText.T("홈 추천","Home recommendations","ホームのおすすめ"));

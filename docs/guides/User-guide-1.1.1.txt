@@ -1,0 +1,66 @@
+FK_YT 1.1.1 supplementary guide
+
+Release page (check current public availability):
+https://github.com/mobsweeper/FK_YT/releases/tag/v1.1.1
+Download checksums:
+https://github.com/mobsweeper/FK_YT/releases/download/v1.1.1/SHA256SUMS.txt
+
+1. Starting and keeping your data
+
+For a simple setup, use FK_YT-1.1.1-portable.zip. Extract the whole ZIP into a new writable folder and run FK_YT.exe inside FK_YT. Portable data is stored in the data folder beside the app.
+
+FK_YT-1.1.1-Setup-x64.exe installs system-wide with administrator permission. It defaults to native 64-bit Program Files and uses English pages. Close Setup and open FK_YT (System) from Start Menu. The app runs as a normal user and stores each Windows user's data in %LOCALAPPDATA%\FK_YT\data.
+
+Both packages use the same app DLL, features and bundled tools. Preserve FK_YT.install-mode in the installed app, together with runtime, worker, DLLs and legal notices.
+
+Uninstall targets owned program files, shared shortcuts and registration. It preserves every user's settings, sign-in, history, resume positions and downloads, with no data-deletion checkbox. Added, modified or locked program files can remain. To remove a portable copy, close it and delete its folder; deleting data also deletes its app data.
+
+Before updates or data moves, close FK_YT and keep the original. Extract new portable ZIPs into empty folders. Nothing is automatically imported into an installed copy. Copy data only into an empty destination as the same Windows user. Do not merge SQLite databases or overwrite a data directory already in use.
+
+2. Watch history: choose before sending
+
+Settings → Send watch history to my YouTube account is OFF by default. When upgrading older settings without the new preference version, sending is turned OFF once because the old enabled value might have been the previous default. The migration notice explains this. Enable it yourself if wanted. Your saved explicit choice persists across app restarts and account changes. Incognito blocks sending without changing that choice.
+
+Normal-mode local history and precise resume positions remain available while sending is off. Turning sending on does not send your old local history. A new sending record requires 30 seconds of actual playback after opting in, or 80% for a video shorter than 30 seconds. Pausing, buffering, seeking and position jumps do not count as watched time. YouTube may show a submitted video as fully watched; the precise resume position is stored separately in this app.
+
+Accepted records are saved in a SQLite queue for their account and channel, then attempted sequentially, oldest first. After a normal restart, never-attempted Pending records continue automatically once sending is enabled and the connected account/channel validates. An interrupted in-progress attempt becomes Unconfirmed and will not be sent again automatically. Failed attempts are also kept without automatic retry. Sent means the request was acknowledged; check YouTube history separately to confirm reflection.
+
+Turning sending off, switching/reconnecting accounts, switching channels or entering incognito holds unsent records. Turning sending on, leaving incognito or restarting does not release Held records. Settings shows Pending, Held, Unconfirmed and Failed counts. Check the selected account/channel and the reason for the hold, refresh the channel list if requested, then select Resume held records. This releases only the current account/channel's never-attempted Held records. It does not resend Failed or Unconfirmed attempts. Refresh pending status rechecks queue storage/status; it does not release held records or validate your account.
+
+Session, bot-check or request-limit errors hold further sending. Two consecutive ambiguous outcomes also hold the remaining queue; other single failures may be followed by other pending records. Resolve the issue before manually resuming. If storage cannot be read/written, sending stops: check storage and refresh pending status. Keep the database and settings together in a closed-app backup. Do not edit queue rows to force a retry. Incognito does not read/send the queue or save local history/resume positions. Unofficial account integration carries service-policy and account-access restriction risks.
+
+3. Interface and ordinary videos
+
+Theater mode can keep comments/recommendations open. Comments load only when requested. Normal/theater playback controls can be collapsed and restored; that choice lasts for the app session. Fullscreen/popout keep automatic hiding.
+
+An explicit seek to zero in an ordinary video can save the confirmed zero resume position. Initial automatic zero observations do not erase an existing resume position. Incognito and live playback do not use VOD resume saving.
+
+Shorts filtering removes explicitly marked served-ad cards. It preserves ordinary videos and creator paid-promotion disclosures. Every real upstream ad variant has not been verified.
+
+4. Live playback and LIVE
+
+Seeking uses only confirmed local mpv cache ranges, including gaps. LIVE reopens the broadcast edge and preserves an intentional pause. It cannot retrieve data from before you joined or seek through the server's entire DVR window.
+
+Confirmed live playback uses a 6 GiB backward RAM-cache budget per demuxer. It is not allocated in advance and is not a whole-app RAM limit. The forward budget stays 32 MiB and disk caching is disabled. No fixed rewind duration or retention of every past segment is guaranteed.
+
+A stream recognized as live after loading can keep its original budget if next-video preload was already attempted. Reopen it with LIVE to apply the live budget. Ordinary videos keep the existing 32 MiB forward / 8 MiB backward budgets.
+
+After checking broadcast status and error type, live disconnections can retry up to three times after 2/5/10 seconds. Authentication, access and rate-limit errors stop retries. Manual pause, stop, media/account changes and incognito changes cancel recovery. Automatic next-video playback waits for confirmed broadcast end.
+
+Sign-in slots other than guest/default need a validated single muxed audio/video HTTPS HLS stream. Unsupported transports fail explicitly without changing to another account. Live chat, scheduled-stream waiting and recording are not included.
+
+5. Experimental tool updates
+
+Settings offers manual experimental yt-dlp/Deno checks, staging, rollback and bundled-tool restore. There are no automatic online checks or installations. The yt-dlp EXE, matching Python package and EJS are staged together and apply on the next app start. The current process keeps its original tools. Python, mpv and FFmpeg are not updated by this feature.
+
+Keep bundled tools if playback works normally. A new version can break playback, lists, comments or subtitles after offline checks pass. Downloads use official HTTPS services without YouTube cookies. HTTPS hashes do not replace an independent publisher signature.
+
+Tools are stored in portable data\tools or installed %LOCALAPPDATA%\FK_YT\data\tools. Original tools and completed older versions are retained, with no automatic cleanup or total storage cap. Confirmed corrupt rollback candidates are disabled for the current app session. A restart can offer them again, but activation requires revalidation. Cancellation and transient access errors are not all labelled corruption.
+
+Review each downloaded version's notices and corresponding sources before redistributing it. Original release source ZIPs describe only the original bundled versions.
+
+6. Verification and privacy
+
+The history implementation previously passed isolated offline checks (50 C# core groups, 17 UI groups and 262 Python checks). Existing updater checks recorded 249 assertions; a native mpv cache probe used local media. These are different check sets, not a combined total. The normal 1.1.1 app was published offline with the pinned SDK/cache and zero compiler warnings. No new manual 1.1.1 installation/removal or real YouTube/account-history test is claimed. The maintainer's Windows 10/11 installation, installed-app launch/playback, installer-update and removal confirmation on 2026-10-17 belongs to 1.1. Fresh long playback/live, full cache pressure, official experimental-tool activation, installation timing and detailed UAC/permissions remain outside the new offline checks.
+
+Incognito does not hide your IP or delete deliberate downloads. Use a dedicated Firefox profile for YouTube. Never attach cookies, authentication tokens, data folders or personal backups to bug reports. External components retain their own licenses; preserve original notices and source-access information.

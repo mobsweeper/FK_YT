@@ -12,6 +12,7 @@ public partial class MainWindow
         RefreshToolUpdateUiText();
         RefreshBrowseUiText();
         RefreshFeatureUiText();
+        RefreshHistoryOutboxUi();
         RefreshQueueUiText();
         RefreshInteractionUiText();
         RefreshPlayerViewModeUiText();

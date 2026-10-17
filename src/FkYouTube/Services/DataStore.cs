@@ -5,6 +5,10 @@ using System.Text;
 
 namespace FkYouTube.Services;
 
+public sealed record HistoryOutboxSession(bool Enabled,string Epoch);
+public sealed record HistoryOutboxItem(string EventId,string Account,string Channel,string Epoch,string VideoId);
+public sealed record HistoryOutboxCounts(int Pending,int Held,int Unknown,int Failed);
+
 public sealed class DataStore
 {
     private readonly string _connectionString;
@@ -13,6 +17,7 @@ public sealed class DataStore
     private readonly object _settingsSync=new();
     public bool HasSettingsLoadFailure=>SettingsLoadFailureMessage is not null;
     public string? SettingsLoadFailureMessage {get;private set;}
+    public bool HistorySyncPreferenceMigrated {get;private set;}
     public DataStore(RuntimePaths paths)
     {
         _settingsPath = Path.Combine(paths.Data, "settings.json");
@@ -26,6 +31,18 @@ public sealed class DataStore
               position REAL NOT NULL, duration REAL NOT NULL, updated TEXT NOT NULL, sync_status TEXT NOT NULL DEFAULT 'local',
               PRIMARY KEY(account,video_id));
             CREATE INDEX IF NOT EXISTS history_account_updated ON history(account,updated DESC);
+            CREATE TABLE IF NOT EXISTS history_outbox_control(
+              id INTEGER NOT NULL PRIMARY KEY CHECK(id=1),
+              enabled INTEGER NOT NULL CHECK(enabled IN(0,1)),epoch TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS history_outbox(
+              event_id TEXT NOT NULL PRIMARY KEY,account TEXT NOT NULL,channel TEXT NOT NULL,
+              epoch TEXT NOT NULL,video_id TEXT NOT NULL,created TEXT NOT NULL,
+              state TEXT NOT NULL CHECK(state IN('pending','inflight','sent','failed','unknown','held')),
+              error_code TEXT);
+            CREATE INDEX IF NOT EXISTS history_outbox_scope_state ON history_outbox(account,channel,epoch,state);
+            CREATE INDEX IF NOT EXISTS history_outbox_account_video ON history_outbox(account,video_id);
+            CREATE INDEX IF NOT EXISTS history_outbox_visible_counts ON history_outbox(account,channel,state)
+              WHERE state IN('pending','held','unknown','failed');
             """;
         command.ExecuteNonQuery();
     }
@@ -35,13 +52,21 @@ public sealed class DataStore
         // first database open, including its parent directories.
         FileBoundary.EnsureRegularFileAndSiblings(_databasePath,"-wal","-shm","-journal");
         var connection=new SqliteConnection(_connectionString);
-        try { connection.Open();return connection; }
+        try
+        {
+            connection.Open();
+            // The outbox must commit its claim before any network request.
+            // Set this per connection, including connections returned by pooling.
+            using var command=connection.CreateCommand();command.CommandText="PRAGMA synchronous=FULL";
+            command.ExecuteNonQuery();return connection;
+        }
         catch { connection.Dispose();throw; }
     }
     public AppSettings LoadSettings()
     {
         lock(_settingsSync)
         {
+        HistorySyncPreferenceMigrated=false;
         try
         {
             FileBoundary.EnsureRegularPath(_settingsPath);
@@ -58,11 +83,16 @@ public sealed class DataStore
             settings.UiLanguage=UiText.NormalizeLanguage(settings.UiLanguage);
             if(settings.QualityPreferenceVersion<1)
             {settings.MaxHeight=0;settings.QualityPreferenceVersion=1;}
+            HistorySyncPreferenceMigrated=NormalizeHistorySyncPreference(settings);
             NormalizeNumericSettings(settings);
             SettingsLoadFailureMessage=null;
             return settings;
         }
-        catch(FileNotFoundException) { SettingsLoadFailureMessage=null;return new(); }
+        catch(FileNotFoundException)
+        {
+            SettingsLoadFailureMessage=null;
+            return new(){HistorySyncPreferenceVersion=AppSettings.CurrentHistorySyncPreferenceVersion};
+        }
         catch(JsonException){return UnreadableSettings();}
         catch(InvalidDataException){return UnreadableSettings();}
         catch(Exception ex)when(ex is IOException or UnauthorizedAccessException)
@@ -82,6 +112,14 @@ public sealed class DataStore
         settings.Volume=double.IsFinite(settings.Volume)?Math.Clamp(settings.Volume,0,100):70;
         if(settings.Speed is not (0.5 or 1 or 1.25 or 1.5 or 2))settings.Speed=1;
         if(settings.MaxHeight is <0 or >16384)settings.MaxHeight=0;
+    }
+    private static bool NormalizeHistorySyncPreference(AppSettings settings)
+    {
+        if(settings.HistorySyncPreferenceVersion>=AppSettings.CurrentHistorySyncPreferenceVersion)return false;
+        // A legacy true value could be the old default rather than an explicit opt-in.
+        settings.SyncHistory=false;
+        settings.HistorySyncPreferenceVersion=AppSettings.CurrentHistorySyncPreferenceVersion;
+        return true;
     }
     private string ReadSettingsText()
     {
@@ -114,6 +152,7 @@ public sealed class DataStore
             FileBoundary.EnsureRegularPath(_settingsPath);
             NormalizeNumericSettings(settings);
             settings.QualityPreferenceVersion=1;
+            NormalizeHistorySyncPreference(settings);
             var bytes=JsonSerializer.SerializeToUtf8Bytes(settings,JsonDefaults.Options);
             var temp=Path.Combine(Path.GetDirectoryName(_settingsPath)!,"settings-"+Guid.NewGuid().ToString("N")+".new");
             var created=false;
@@ -161,10 +200,285 @@ public sealed class DataStore
         foreach(var id in videoIds){video.Value=id;c.ExecuteNonQuery();}
         transaction.Commit();
     }
+    public HistoryOutboxSession InitializeHistoryOutbox(bool enabled,bool holdPending)
+    {
+        using var db=Open();using var transaction=db.BeginTransaction();
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="INSERT OR IGNORE INTO history_outbox_control(id,enabled,epoch) VALUES(1,$enabled,$epoch)";
+            c.Parameters.AddWithValue("$enabled",enabled?1:0);c.Parameters.AddWithValue("$epoch",NewHistoryOutboxEpoch());
+            c.ExecuteNonQuery();
+        }
+        var session=ReadHistoryOutboxSession(db,transaction)
+            ?? throw new InvalidDataException("The history outbox permission record could not be initialized.");
+        // A stale settings true must never undo a database revocation whose
+        // settings-file save failed. Only the explicit setter can enable it.
+        if(!enabled && session.Enabled)
+        {
+            session=new(false,NewHistoryOutboxEpoch());
+            WriteHistoryOutboxSession(db,transaction,session);
+        }
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="UPDATE history_outbox SET state='unknown',error_code='interrupted' WHERE state='inflight'";
+            c.ExecuteNonQuery();
+        }
+        if(!session.Enabled || holdPending)HoldPendingHistoryOutbox(db,transaction);
+        transaction.Commit();return session;
+    }
+    public HistoryOutboxSession SetHistoryOutboxEnabled(bool enabled)
+    {
+        using var db=Open();using var transaction=db.BeginTransaction();
+        var session=new HistoryOutboxSession(enabled,NewHistoryOutboxEpoch());
+        WriteHistoryOutboxSession(db,transaction,session);
+        // Enabling grants future work; it does not silently revive older work.
+        HoldPendingHistoryOutbox(db,transaction);
+        transaction.Commit();return session;
+    }
+    public HistoryOutboxSession HoldHistoryOutbox()
+    {
+        using var db=Open();using var transaction=db.BeginTransaction();
+        var previous=ReadHistoryOutboxSession(db,transaction);
+        var session=new HistoryOutboxSession(previous?.Enabled??false,NewHistoryOutboxEpoch());
+        WriteHistoryOutboxSession(db,transaction,session);
+        HoldPendingHistoryOutbox(db,transaction);
+        transaction.Commit();return session;
+    }
+    public void HoldHistoryOutboxScope(string account,string channel)
+    {
+        ValidateHistoryOutboxIdentity(account,nameof(account));ValidateHistoryOutboxChannel(channel,nameof(channel));
+        using var db=Open();using var c=db.CreateCommand();
+        c.CommandText="UPDATE history_outbox SET state='held',error_code=NULL WHERE account=$account AND channel=$channel AND state='pending'";
+        c.Parameters.AddWithValue("$account",account);c.Parameters.AddWithValue("$channel",channel);c.ExecuteNonQuery();
+    }
+    public int ResumeHeldHistoryOutbox(string account,string channel,string epoch)
+    {
+        ValidateHistoryOutboxScope(account,channel,epoch);
+        using var db=Open();using var transaction=db.BeginTransaction();
+        var session=ReadHistoryOutboxSession(db,transaction);
+        if(session is not {Enabled:true} || session.Epoch!=epoch)return 0;
+        using var c=db.CreateCommand();c.Transaction=transaction;
+        c.CommandText="UPDATE history_outbox SET state='pending',epoch=$epoch,error_code=NULL WHERE account=$account AND channel=$channel AND state='held'";
+        AddHistoryOutboxScope(c,account,channel,epoch);
+        var resumed=c.ExecuteNonQuery();transaction.Commit();return resumed;
+    }
+    public bool EnqueueHistoryOutbox(string eventId,string account,string channel,string epoch,string videoId)
+    {
+        ValidateHistoryOutboxIdentity(eventId,nameof(eventId));
+        ValidateHistoryOutboxScope(account,channel,epoch);
+        ValidateHistoryOutboxVideoId(videoId,nameof(videoId));
+        using var db=Open();using var transaction=db.BeginTransaction();
+        var session=ReadHistoryOutboxSession(db,transaction);
+        if(session is not {Enabled:true} || session.Epoch!=epoch)return false;
+        var item=new HistoryOutboxItem(eventId,account,channel,epoch,videoId);
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="SELECT event_id,account,channel,epoch,video_id FROM history_outbox WHERE event_id=$event";
+            c.Parameters.AddWithValue("$event",eventId);
+            using var r=c.ExecuteReader();
+            if(r.Read())
+            {
+                if(ReadHistoryOutboxItem(r)!=item)
+                    throw new InvalidDataException("The history outbox event identifier belongs to different work.");
+                r.Close();transaction.Commit();return true;
+            }
+        }
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="""
+                INSERT INTO history_outbox(event_id,account,channel,epoch,video_id,created,state)
+                  VALUES($event,$account,$channel,$epoch,$video,$created,'pending');
+                UPDATE history SET sync_status='pending' WHERE account=$account AND video_id=$video;
+                """;
+            c.Parameters.AddWithValue("$event",eventId);AddHistoryOutboxScope(c,account,channel,epoch);
+            c.Parameters.AddWithValue("$video",videoId);
+            c.Parameters.AddWithValue("$created",DateTimeOffset.UtcNow.ToString("O",CultureInfo.InvariantCulture));
+            c.ExecuteNonQuery();
+        }
+        transaction.Commit();return true;
+    }
+    public void PreserveHeldHistoryOutbox(string eventId,string account,string channel,string epoch,string videoId)
+    {
+        // The caller may only pass a draft accepted while consent was valid.
+        // Its eventual storage must not grant permission to send it.
+        ValidateHistoryOutboxIdentity(eventId,nameof(eventId));
+        ValidateHistoryOutboxScope(account,channel,epoch);
+        ValidateHistoryOutboxVideoId(videoId,nameof(videoId));
+        using var db=Open();using var transaction=db.BeginTransaction();
+        var item=new HistoryOutboxItem(eventId,account,channel,epoch,videoId);
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="SELECT event_id,account,channel,epoch,video_id FROM history_outbox WHERE event_id=$event";
+            c.Parameters.AddWithValue("$event",eventId);
+            using var r=c.ExecuteReader();
+            if(r.Read())
+            {
+                if(ReadHistoryOutboxItem(r)!=item)
+                    throw new InvalidDataException("The history outbox event identifier belongs to different work.");
+                r.Close();transaction.Commit();return;
+            }
+        }
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="""
+                INSERT INTO history_outbox(event_id,account,channel,epoch,video_id,created,state)
+                  VALUES($event,$account,$channel,$epoch,$video,$created,'held');
+                UPDATE history SET sync_status='held' WHERE account=$account AND video_id=$video;
+                """;
+            c.Parameters.AddWithValue("$event",eventId);AddHistoryOutboxScope(c,account,channel,epoch);
+            c.Parameters.AddWithValue("$video",videoId);
+            c.Parameters.AddWithValue("$created",DateTimeOffset.UtcNow.ToString("O",CultureInfo.InvariantCulture));
+            c.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+    public HistoryOutboxItem? ClaimNextHistoryOutbox(string account,string channel,string epoch)
+    {
+        ValidateHistoryOutboxScope(account,channel,epoch);
+        using var db=Open();using var transaction=db.BeginTransaction();
+        var session=ReadHistoryOutboxSession(db,transaction);
+        if(session is not {Enabled:true} || session.Epoch!=epoch)return null;
+        HistoryOutboxItem item;
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="SELECT event_id,account,channel,epoch,video_id FROM history_outbox WHERE account=$account AND channel=$channel AND epoch=$epoch AND state='pending' ORDER BY rowid LIMIT 1";
+            AddHistoryOutboxScope(c,account,channel,epoch);
+            using var r=c.ExecuteReader();if(!r.Read())return null;
+            item=ReadHistoryOutboxItem(r);
+        }
+        using(var c=db.CreateCommand())
+        {
+            c.Transaction=transaction;
+            c.CommandText="UPDATE history_outbox SET state='inflight',error_code=NULL WHERE event_id=$event AND state='pending'";
+            c.Parameters.AddWithValue("$event",item.EventId);
+            if(c.ExecuteNonQuery()!=1)throw new InvalidDataException("The history outbox item could not be claimed.");
+        }
+        // The caller must not send until this durable claim has committed.
+        transaction.Commit();return item;
+    }
+    public void CompleteHistoryOutbox(string eventId,string state,string? errorCode=null,bool holdRemaining=false)
+    {
+        ValidateHistoryOutboxIdentity(eventId,nameof(eventId));
+        if(state is not ("sent" or "failed" or "unknown"))
+            throw new ArgumentException("A history outbox completion must be sent, failed, or unknown.",nameof(state));
+        if(errorCode is not null)ValidateHistoryOutboxIdentity(errorCode,nameof(errorCode),64);
+        using var db=Open();using var transaction=db.BeginTransaction();using var c=db.CreateCommand();
+        c.Transaction=transaction;
+        c.CommandText="UPDATE history_outbox SET state=$state,error_code=$error WHERE event_id=$event AND state='inflight'";
+        c.Parameters.AddWithValue("$event",eventId);c.Parameters.AddWithValue("$state",state);
+        c.Parameters.AddWithValue("$error",(object?)errorCode??DBNull.Value);
+        if(c.ExecuteNonQuery()!=1)throw new InvalidDataException("The history outbox inflight item could not be completed.");
+        if(holdRemaining)
+        {
+            using var hold=db.CreateCommand();hold.Transaction=transaction;
+            hold.CommandText="""
+                UPDATE history_outbox SET state='held',error_code=NULL WHERE state='pending'
+                  AND account=(SELECT account FROM history_outbox WHERE event_id=$event)
+                  AND channel=(SELECT channel FROM history_outbox WHERE event_id=$event)
+                """;
+            hold.Parameters.AddWithValue("$event",eventId);hold.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+    public HistoryOutboxCounts GetHistoryOutboxCounts(string account,string channel)
+    {
+        ValidateHistoryOutboxIdentity(account,nameof(account));ValidateHistoryOutboxChannel(channel,nameof(channel));
+        using var db=Open();using var c=db.CreateCommand();
+        c.CommandText="""
+            SELECT COALESCE(SUM(CASE WHEN state='pending' THEN 1 ELSE 0 END),0),
+              COALESCE(SUM(CASE WHEN state='held' THEN 1 ELSE 0 END),0),
+              COALESCE(SUM(CASE WHEN state='unknown' THEN 1 ELSE 0 END),0),
+              COALESCE(SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END),0)
+            FROM history_outbox WHERE account=$account AND channel=$channel AND state IN('pending','held','unknown','failed')
+            """;
+        c.Parameters.AddWithValue("$account",account);c.Parameters.AddWithValue("$channel",channel);
+        using var r=c.ExecuteReader();r.Read();
+        return new(checked((int)r.GetInt64(0)),checked((int)r.GetInt64(1)),checked((int)r.GetInt64(2)),checked((int)r.GetInt64(3)));
+    }
+    private static string NewHistoryOutboxEpoch()=>Guid.NewGuid().ToString("N");
+    private static HistoryOutboxSession? ReadHistoryOutboxSession(SqliteConnection db,SqliteTransaction transaction)
+    {
+        using var c=db.CreateCommand();c.Transaction=transaction;
+        c.CommandText="SELECT enabled,epoch FROM history_outbox_control WHERE id=1";
+        using var r=c.ExecuteReader();if(!r.Read())return null;
+        var enabled=r.GetInt64(0);var epoch=r.GetString(1);
+        if(enabled is not (0 or 1) || !IsHistoryOutboxIdentity(epoch))
+            throw new InvalidDataException("The history outbox permission record is invalid.");
+        return new(enabled==1,epoch);
+    }
+    private static void WriteHistoryOutboxSession(SqliteConnection db,SqliteTransaction transaction,HistoryOutboxSession session)
+    {
+        using var c=db.CreateCommand();c.Transaction=transaction;
+        c.CommandText="INSERT INTO history_outbox_control(id,enabled,epoch) VALUES(1,$enabled,$epoch) ON CONFLICT(id) DO UPDATE SET enabled=$enabled,epoch=$epoch";
+        c.Parameters.AddWithValue("$enabled",session.Enabled?1:0);c.Parameters.AddWithValue("$epoch",session.Epoch);
+        c.ExecuteNonQuery();
+    }
+    private static void HoldPendingHistoryOutbox(SqliteConnection db,SqliteTransaction transaction)
+    {
+        using var c=db.CreateCommand();c.Transaction=transaction;
+        c.CommandText="UPDATE history_outbox SET state='held',error_code=NULL WHERE state='pending'";c.ExecuteNonQuery();
+    }
+    private static void AddHistoryOutboxScope(SqliteCommand command,string account,string channel,string epoch)
+    {
+        command.Parameters.AddWithValue("$account",account);command.Parameters.AddWithValue("$channel",channel);
+        command.Parameters.AddWithValue("$epoch",epoch);
+    }
+    private static HistoryOutboxItem ReadHistoryOutboxItem(SqliteDataReader reader)
+    {
+        var item=new HistoryOutboxItem(reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4));
+        if(!IsHistoryOutboxIdentity(item.EventId) || !IsHistoryOutboxIdentity(item.Account) ||
+            !IsHistoryOutboxChannel(item.Channel) || !IsHistoryOutboxIdentity(item.Epoch) || !IsHistoryOutboxVideoId(item.VideoId))
+            throw new InvalidDataException("The history outbox work identity is invalid.");
+        return item;
+    }
+    private static bool IsHistoryOutboxIdentity(string? value,int maxLength=128)=>
+        value is {Length:>0} && value.Length<=maxLength && value.All(c=>char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
+    public static bool IsHistoryOutboxChannel(string? value)
+    {
+        // youtube_session.parse_accounts produces this opaque local identifier;
+        // SessionService preserves it rather than substituting a public UC ID.
+        if(value is not {Length:72} || !value.StartsWith("channel:",StringComparison.Ordinal))return false;
+        for(var index=8;index<value.Length;index++)
+            if(value[index] is not (>= '0' and <= '9' or >= 'a' and <= 'f'))return false;
+        return true;
+    }
+    private static bool IsHistoryOutboxVideoId(string? value)=>value is {Length:11} && IsHistoryOutboxIdentity(value,11);
+    private static void ValidateHistoryOutboxIdentity(string? value,string parameterName,int maxLength=128)
+    {
+        if(!IsHistoryOutboxIdentity(value,maxLength))
+            throw new ArgumentException($"History outbox identifiers must contain 1 to {maxLength} ASCII letters, digits, underscores, or hyphens.",parameterName);
+    }
+    private static void ValidateHistoryOutboxVideoId(string? value,string parameterName)
+    {
+        if(!IsHistoryOutboxVideoId(value))throw new ArgumentException("A history outbox video identifier must contain exactly 11 ASCII letters, digits, underscores, or hyphens.",parameterName);
+    }
+    private static void ValidateHistoryOutboxChannel(string? value,string parameterName)
+    {
+        if(!IsHistoryOutboxChannel(value))
+            throw new ArgumentException("A history outbox channel identifier must be channel: followed by exactly 64 lowercase hexadecimal digits.",parameterName);
+    }
+    private static void ValidateHistoryOutboxScope(string account,string channel,string epoch)
+    {
+        ValidateHistoryOutboxIdentity(account,nameof(account));ValidateHistoryOutboxChannel(channel,nameof(channel));
+        ValidateHistoryOutboxIdentity(epoch,nameof(epoch));
+    }
     public IReadOnlyList<HistoryEntry> GetHistory(string account,int count=500)=>GetHistory(account,out _,count);
     public IReadOnlyList<HistoryEntry> GetHistory(string account,out int skippedCount,int count=500)
     {
-        using var db=Open();using var c=db.CreateCommand(); c.CommandText="SELECT metadata,position,duration,updated,sync_status,video_id FROM history WHERE account=$a ORDER BY updated DESC LIMIT $n";
+        using var db=Open();using var c=db.CreateCommand(); c.CommandText="""
+            SELECT h.metadata,h.position,h.duration,h.updated,
+              CASE WHEN h.sync_status='confirmed' THEN h.sync_status ELSE
+                COALESCE((SELECT o.state FROM history_outbox o WHERE o.account=h.account AND o.video_id=h.video_id ORDER BY o.rowid DESC LIMIT 1),h.sync_status)
+              END,h.video_id
+            FROM history h WHERE h.account=$a ORDER BY h.updated DESC LIMIT $n
+            """;
         c.Parameters.AddWithValue("$a",account);c.Parameters.AddWithValue("$n",count);
         using var r=c.ExecuteReader();var result=new List<HistoryEntry>();
         skippedCount=0;

@@ -1,6 +1,6 @@
-"""Assemble FK_YT 1.1 portable from the pinned 1.0 ZIP and a normal publish.
+"""Assemble FK_YT 1.1.1 portable from the pinned 1.0 ZIP and a normal publish.
 
-Only the four application files, eleven production workers, public 1.1 documents,
+Only the four application files, eleven production workers, public 1.1.1 documents,
 and two generated metadata files may change. All other base payload bytes remain
 unchanged. This recipe never builds, launches, downloads, or publishes anything.
 Run with Python 3.10 or newer; the output parent directory must already exist.
@@ -19,8 +19,16 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 BASE_SHA256 = "05fd94e0901e22903db33d3bc4ee9f57bfb0509b93fb5010ef1aa6ad5df25d72"
+SOURCE_ASSETS = [
+    {"name": "FK_YT_yt-dlp.zip", "bytes": 165234763,
+     "sha256": "e22f4df8dcb40205dc9b2b2ade373a6d6f3d3e5adab786b36f628999504c8ab2"},
+    {"name": "FK_YT_mpv-FFmpeg-part1.zip", "bytes": 1608074669,
+     "sha256": "b53ab130c5f1102874f7edbdfc49b0baa30fa1eb1251ad476e9e3624512c4129"},
+    {"name": "FK_YT_mpv-FFmpeg-part2.zip", "bytes": 118680866,
+     "sha256": "5f499d855e975df0f8c72e0e2a3d3949b13f8f121a9c241273ca2b1c0337cc53"},
+]
 PREFIX = "FK_YT/"
 APP_FILES = ("FK_YT.exe", "FK_YT.dll", "FK_YT.deps.json", "FK_YT.runtimeconfig.json")
 WORKER_NAMES = (
@@ -29,13 +37,14 @@ WORKER_NAMES = (
     "related_feed.py", "home_feed.py", "channel_feed.py", "channel_metadata.py",
 )
 DOCUMENTS = {
-    "docs/FEATURES-1.1.md": "FEATURES-1.1.md",
-    "docs/guides/사용설명서-1.1.txt": "사용설명서-1.1.txt",
-    "docs/guides/User-guide-1.1.txt": "User-guide-1.1.txt",
-    "docs/guides/ご利用ガイド-1.1.txt": "ご利用ガイド-1.1.txt",
+    "docs/FEATURES-1.1.1.md": "FEATURES-1.1.1.md",
+    "docs/guides/사용설명서-1.1.1.txt": "사용설명서-1.1.1.txt",
+    "docs/guides/User-guide-1.1.1.txt": "User-guide-1.1.1.txt",
+    "docs/guides/ご利用ガイド-1.1.1.txt": "ご利用ガイド-1.1.1.txt",
     "license.md": "license.md",
-    "docs/LICENSING-1.1.md": "LICENSING-1.1.md",
-    "docs/SOURCE-ACCESS-1.1.txt": "SOURCE-ACCESS-1.1.txt",
+    "docs/RELEASE-1.1.1.md": "RELEASE-1.1.1.md",
+    "docs/LICENSING-1.1.1.md": "LICENSING-1.1.1.md",
+    "docs/SOURCE-ACCESS-1.1.1.txt": "SOURCE-ACCESS-1.1.1.txt",
     "docs/LICENSES-SUPPLEMENT-1.1.txt": "LICENSES-SUPPLEMENT-1.1.txt",
 }
 GENERATED = {"file-manifest.json", "distribution-provenance.json"}
@@ -356,8 +365,8 @@ def package(base: Path, publish: Path, output: Path, source_root: Path, app_sour
         raise PackageError("Output must be a new .zip file")
     if file_sha(base) != BASE_SHA256:
         raise PackageError("Base must be the unmodified public 1.0 portable ZIP (SHA-256 pin mismatch)")
-    if app_source.name != "FK_YT-1.1-source.zip":
-        raise PackageError("Matching public source archive must be named FK_YT-1.1-source.zip")
+    if app_source.name != "FK_YT-1.1.1-source.zip":
+        raise PackageError("Matching public source archive must be named FK_YT-1.1.1-source.zip")
     source_archive = {"path": app_source.name, "length": app_source.stat().st_size, "sha256": file_sha(app_source)}
     if any(item.name.lower().endswith(".pdb") for item in publish.iterdir()):
         raise PackageError("Normal publish input must not include PDB files")
@@ -383,11 +392,13 @@ def package(base: Path, publish: Path, output: Path, source_root: Path, app_sour
         if {name for name in before if name.startswith("worker/") and name.endswith(".py")} - {"worker/" + name for name in WORKER_NAMES}:
             raise PackageError("Unexpected production worker in base")
         provenance = {
-            "schema": 1, "product": "FK_YT", "version": "1.1", "applicationVersion": VERSION,
+            "schema": 1, "product": "FK_YT", "version": "1.1.1", "applicationVersion": VERSION,
             "packageRole": "normal portable", "basePortable": {"version": "1.0", "sha256": BASE_SHA256},
             "applicationSource": source_archive,
             "selectedSourceInputs": {"root": "FK_YT", "version": VERSION, "files": sorted(snapshots.values(), key=lambda item: item["path"])},
-            "sourceAssets": vendor_sources, "runtimeChanges": prior.get("runtimeChanges", {}),
+            "sourceAssets": SOURCE_ASSETS, "historicalBaseSourceAssets": vendor_sources,
+            "sourceAccess": "SOURCE-ACCESS-1.1.1.txt",
+            "runtimeChanges": prior.get("runtimeChanges", {}),
             "fileManifest": "file-manifest.json", "appDllSha256": digest(overlays["FK_YT.dll"]),
             "applicationFiles": sorted(app_snapshot.values(), key=lambda item: item["path"]),
             "replacementAllowlist": sorted(REPLACEMENT_ALLOWLIST),
@@ -439,7 +450,7 @@ def main() -> int:
     parser.add_argument("--base", type=Path, required=True, help="Unmodified public 1.0 portable ZIP")
     parser.add_argument("--publish", type=Path, required=True, help="Normal Release win-x64 publish directory")
     parser.add_argument("--output", type=Path, required=True, help="New portable ZIP; existing outputs are refused")
-    parser.add_argument("--app-source", type=Path, required=True, help="Matching FK_YT-1.1-source.zip, created before this portable ZIP")
+    parser.add_argument("--app-source", type=Path, required=True, help="Matching FK_YT-1.1.1-source.zip, created before this portable ZIP")
     parser.add_argument("--source-root", type=Path, default=Path(__file__).absolute().parent.parent, help="Public source root (default: parent of scripts)")
     args = parser.parse_args()
     try:

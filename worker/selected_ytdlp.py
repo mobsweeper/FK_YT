@@ -224,10 +224,11 @@ def run(argv=None):
     while chunk := output.read(65536):
         sys.stdout.write(chunk)
     sys.stdout.flush()
-    # History marking can return exit 0 after a non-fatal warning. Preserve the
-    # existing caller's negative acknowledgement without its private diagnostics.
+    # History marking can return exit 0 after a non-fatal warning. Return only
+    # the allowlisted classification, never private URLs or account diagnostics.
     if "unable to mark" in errors.getvalue().lower():
-        print("WARNING: Unable to mark watched", file=sys.stderr)
+        print("FK_YT_ERROR:" + classify_error(errors.getvalue()), file=sys.stderr)
+        return 1
     return 0
 
 

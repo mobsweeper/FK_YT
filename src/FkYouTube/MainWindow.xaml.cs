@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private readonly YouTubeService _youtube;
     private readonly MpvPlayerService _player;
     private readonly WatchProgressTracker _watch=new();
+    private readonly WatchProgressTracker _historyWatch=new();
     private readonly ObservableCollection<VideoRow> _rows=[];
     private readonly List<VideoItem> _items=[];
     private readonly DispatcherTimer _saveTimer=new(){Interval=TimeSpan.FromSeconds(5)};
@@ -31,9 +32,14 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _feedCts,_videoCts;
     private CancellationTokenSource _accountCts=new();
     private CancellationTokenSource _historyCts=new();
-    private readonly SemaphoreSlim _historyQueue=new(1,1);
+    private Task _historyWorkerTask=Task.CompletedTask;
+    private bool _historyWorkerRunning,_historyWakeRequested,_historyOutboxReady,_historyOutboxFaulted,_historyAccountValidated;
+    private string _historyOutboxEpoch="",_historyEventId=Guid.NewGuid().ToString("N");
+    private HistoryOutboxItem? _pendingHistoryDraft;
+    private bool _historyDraftHeld;
+    private (string Account,string Channel)? _historyOutboxServicePause;
+    private (string Account,string Channel)? _pendingHistoryHold;
     private readonly SemaphoreSlim _videoStartGate=new(1,1);
-    private readonly HashSet<Task> _historyTasks=[];
     private readonly HashSet<Task> _accountReadTasks=[];
     private readonly HashSet<Task> _accountMutationTasks=[];
     private sealed class AccountReadLifetime(Action complete):IDisposable { public void Dispose()=>complete(); }
@@ -58,7 +64,7 @@ public partial class MainWindow : Window
     private Task _volumeTask=Task.CompletedTask;
     private bool _volumeDraining;
     private int _playingListGeneration=-1,_playingIndex=-1,_autoplayHandledGeneration=-1,_autoplayEpoch;
-    private bool _updatingQuality,_updatingSpeed;
+    private bool _updatingQuality,_updatingSpeed,_updatingHistorySync;
     private string _qualityKey="";
     private IReadOnlyList<int> _resolutions=[];
     private CookieLease? _playCookie;
@@ -123,7 +129,7 @@ public partial class MainWindow : Window
         foreach(ComboBoxItem i in SpeedCombo.Items)if(i.Tag?.ToString()==_settings.Speed.ToString(CultureInfo.InvariantCulture))SpeedCombo.SelectedItem=i;
         _player.SnapshotChanged+=snapshot=>Dispatcher.BeginInvoke(()=>OnSnapshot(snapshot));
         _player.PlaybackError+=failure=>Dispatcher.BeginInvoke(()=>OnPlaybackFailure(failure));
-        _saveTimer.Tick+=(_,_)=>SavePosition();_saveTimer.Start();
+        _saveTimer.Tick+=(_,_)=>{SavePosition();TryPersistHistoryDraft();};_saveTimer.Start();
         _pendingLiveSeekTimer.Tick+=(_,_)=>ClearPendingLiveSeek(_pendingLiveSeek);
         try{if(!_store.HasSettingsLoadFailure)_session.RestoreSelectedChannel(_settings.SelectedChannelId);}catch(InvalidDataException){SetStatus(()=>UiText.T("선택한 채널 세션을 다시 연결해야 합니다.","The selected channel session needs to be reconnected.","選択したチャンネルのセッションを再接続する必要があります。"));}
         DisplaySelectedChannel();_ready=true;UpdateSessionLabel();UpdateToolState();
@@ -132,11 +138,18 @@ public partial class MainWindow : Window
     }
     private async void OnLoaded(object sender,RoutedEventArgs e)
     {
+        if(_store.HistorySyncPreferenceMigrated)
+        {
+            HistorySyncMigrationNotice.Visibility=Visibility.Visible;
+            if(!TrySaveSettings()){ShowPanel("settings");return;}
+        }
+        InitializeHistoryOutbox();
         if(_store.HasSettingsLoadFailure){ShowPanel("settings");SetStatus(_store.SettingsLoadFailureMessage!);}
         else if(_session.HasSessionRecoveryFailure){ShowPanel("settings");SetStatus(()=>UiText.T("이전 계정 변경이 완료되지 않았습니다. Firefox 연결 또는 쿠키 가져오기로 새로 연결하세요.","The previous account change was not completed. Reconnect through Firefox or cookie import.","前回のアカウント変更が完了していません。Firefox 接続または Cookie のインポートで再接続してください。"));}
         else if(_settings.Incognito)ShowIncognitoLanding();
         else if(_session.IsConnected){if(await ReloadChannelsAsync())await OpenFeedWithUiTitleAsync("home",()=>UiText.T("홈 추천","Home recommendations","ホームのおすすめ"));}
         else {WelcomePanel.Visibility=Visibility.Visible;MoreButton.Visibility=Visibility.Collapsed;SetStatus(()=>UiText.T("검색어 또는 YouTube 주소로 시작하세요. 개인 추천은 로그인 연결이 필요합니다.","Start with a search or YouTube URL. Personal recommendations require a sign-in connection.","検索語または YouTube URL を入力してください。自分へのおすすめにはログイン接続が必要です。"));}
+        StartHistoryOutboxWorker();RefreshHistoryOutboxUi();
         if(_store.SettingsLoadFailureMessage is {} settingsWarning)SetStatus(settingsWarning);
         if(_profileListWarning is {} profileWarning)
         {
@@ -336,7 +349,7 @@ public partial class MainWindow : Window
         preserveWatch=preserveWatch && _current is {} previous && previous.Id==item.Id && previous.Url==item.Url;
         if(preserveWatch)item=_current!;
         var priorItem=_current;
-        if(!SavePosition())return false;
+        if(!TryPersistHistoryDraft() || !SavePosition())return false;
         double start;
         try
         {
@@ -368,7 +381,7 @@ public partial class MainWindow : Window
         var generation=++_videoGeneration;_activePlaybackRecoveryToken=recoveryToken;_lastPlaybackAccessCode=null;_expectedMediaGeneration=-1;_current=item;_snapshot=null;_hasLoadedCurrent=false;_hasObservedPositivePosition=false;_canSaveZeroPosition=false;SetSyncUiText(()=>"");ResetSeekInteraction();SeekSlider.IsEnabled=false;
         RefreshLiveControls(null);
         if(!preserveWatch)ResetQualityDisplay(item);
-        if(!preserveWatch){_watch.Reset();_playingListGeneration=_feedGeneration;_playingIndex=_items.FindIndex(candidate=>ReferenceEquals(candidate,item));_autoplaySeen.Add(item.Id);}
+        if(!preserveWatch){_watch.Reset();_historyWatch.Reset();_historyEventId=Guid.NewGuid().ToString("N");_playingListGeneration=_feedGeneration;_playingIndex=_items.FindIndex(candidate=>ReferenceEquals(candidate,item));_autoplaySeen.Add(item.Id);}
         _lastValidPosition=start;_lastValidDuration=item.Duration??0;
         PlayingTitle.Text=item.Title;
         if(!preserveWatch){CommentsList.ItemsSource=null;SetCommentUiText(()=>UiText.T("댓글 보기를 누르면 불러옵니다.","Click Comments to load them.","「コメント」を押すと読み込みます。"));}
@@ -534,19 +547,21 @@ public partial class MainWindow : Window
         UpdatePauseControls();
         DecoderLabel.Text=snapshot.HardwareDecoder=="unavailable"?UiText.T("디코더 확인 중","Checking decoder","デコーダーを確認中"):string.IsNullOrWhiteSpace(snapshot.HardwareDecoder)||snapshot.HardwareDecoder=="no"?UiText.T("CPU 디코딩","CPU decoding","CPU デコード"):"HW · "+snapshot.HardwareDecoder;
         if(_watch.Observe(_clock.Elapsed.TotalSeconds,snapshot.Position,snapshot.Duration,snapshot.Speed,snapshot.Paused,snapshot.Buffering,snapshot.Seeking,snapshot.Loaded))
-        {SavePosition();if(!_settings.Incognito && _settings.SyncHistory && _session.IsConnected)TrackHistory(SendHistoryAsync(_current,_settings.AccountKey,_accountCts.Token));}
+            SavePosition();
+        // Remote history counts only playback after opting in. Local history
+        // keeps its own clock and remains independent of this preference.
+        if(CanRecordHistoryOutbox)
+        {
+            if(_historyWatch.Observe(_clock.Elapsed.TotalSeconds,snapshot.Position,snapshot.Duration,snapshot.Speed,snapshot.Paused,snapshot.Buffering,snapshot.Seeking,snapshot.Loaded))
+                QueueHistoryOutbox(_current);
+        }
+        else _historyWatch.Reset();
         if((snapshot.Paused && previous?.Paused!=true) || (snapshot.Ended && previous?.Ended!=true))SavePosition();
         SetStatus(()=>_liveNotice?.Invoke()??_channelReloadError??(snapshot.Ended && snapshot.ErrorMessage is {} playbackError?playbackError:_subtitleLoadError??(snapshot.Buffering?UiText.T("버퍼링 중…","Buffering…","バッファリング中…"):snapshot.Loaded?(_settings.Incognito?UiText.T("시크릿 재생 · 로그인 쿠키와 시청 기록·이어보기 저장을 사용하지 않습니다.","Incognito playback · Sign-in cookies, watch history, and saved resume positions are disabled.","シークレット再生・ログイン Cookie、再生履歴、再開位置の保存は使用しません。"):_syncMessage.Length>0?_syncMessage:UiText.T("재생 중 · 정확한 이어보기 위치는 이 앱에 저장됩니다.","Playing · The exact resume position is saved in this app.","再生中・正確な再開位置はこのアプリに保存されます。")):snapshot.Ended?UiText.T("재생이 끝났습니다.","Playback has ended.","再生が終了しました。"):UiText.T("영상을 준비하는 중…","Preparing the video…","動画を準備中…"))));
         if(snapshot.Ended && snapshot.AuthenticationRequired)HandleAuthenticationRequired();
         if(snapshot.IsLive)ObserveLivePlayback(snapshot);
         if(!snapshot.IsLive && _current.LiveStatus!="is_live" && snapshot.EndReason=="eof" && _hasLoadedCurrent && _settings.AutoPlayNext && _autoplayHandledGeneration!=_videoGeneration)
         {_autoplayHandledGeneration=_videoGeneration;_=AutoPlayNextAsync(_videoGeneration,_autoplayEpoch);}
-    }
-    private async void TrackHistory(Task task)
-    {
-        _historyTasks.Add(task);
-        try{await task;}catch(OperationCanceledException){}catch(Exception error){Trace.TraceError("FK_YT history completion: {0}",error.GetType().Name);}
-        finally{_historyTasks.Remove(task);}
     }
     private async Task CancelAccountWorkAsync()
     {
@@ -555,7 +570,7 @@ public partial class MainWindow : Window
         _commentsCts?.Cancel();_qualityCts?.Cancel();_relatedCts?.Cancel();_prefetchCts?.Cancel();
         CancelSubtitleOperations();NotifyPlaybackQueueChanged();
         _pendingVolume=null;
-        var pending=Task.WhenAll(_historyTasks.Concat(_ratingTasks).Concat(_subtitleTasks).Concat(_accountReadTasks).Append(_authenticationSkipTask).Append(_volumeTask).Append(_liveRecoveryTask).ToArray());
+        var pending=Task.WhenAll(_ratingTasks.Concat(_subtitleTasks).Concat(_accountReadTasks).Append(_historyWorkerTask).Append(_authenticationSkipTask).Append(_volumeTask).Append(_liveRecoveryTask).ToArray());
         try{await pending.WaitAsync(TimeSpan.FromSeconds(5));}
         catch(TimeoutException error)
         {
@@ -567,40 +582,238 @@ public partial class MainWindow : Window
         catch(OperationCanceledException){}
         catch(Exception error){Trace.TraceError("FK_YT account completion: {0}",error.GetType().Name);if(_closing)throw;}
     }
-    private async Task SendHistoryAsync(VideoItem video,string account,CancellationToken ct)
+    // The database owns the backlog. Memory holds one sender and at most one
+    // not-yet-committed draft; a failed local save must not silently evict it.
+    private string HistoryOutboxChannel=>_session.SelectedChannel?.Id??"";
+    private bool CanRecordHistoryOutbox=>!AccountWorkBlocked && !_channelReloadBusy &&
+        _historyOutboxReady && _settings.SyncHistory && !_settings.Incognito &&
+        !_session.HasSessionRecoveryFailure && _session.IsConnected &&
+        DataStore.IsHistoryOutboxChannel(HistoryOutboxChannel) && HistoryOutboxChannel==_settings.SelectedChannelId;
+    private bool HistoryOutboxServicePaused=>_historyOutboxServicePause is {} scope &&
+        scope.Account==_settings.AccountKey && scope.Channel==HistoryOutboxChannel;
+    private bool CanResumeHistoryOutbox=>CanRecordHistoryOutbox && _historyAccountValidated && !_historyOutboxFaulted;
+    private bool CanSendHistoryOutbox=>CanResumeHistoryOutbox && !HistoryOutboxServicePaused;
+    private void HistoryOutboxStorageFailure()
     {
-        using var cancellation=CancellationTokenSource.CreateLinkedTokenSource(ct,_historyCts.Token);
-        ct=cancellation.Token;var started=false;
+        _historyOutboxFaulted=true;
+        SetSyncUiText(()=>UiText.T("시청 기록 대기열을 저장하거나 읽지 못했습니다. 전송을 멈췄습니다. 저장소를 확인한 뒤 설정에서 대기 상태를 새로고침하세요.","Could not save or read the watch history queue. Sending stopped. Check storage, then refresh pending status in Settings.","再生履歴の待機列を保存または読み取れませんでした。送信を停止しました。保存先を確認し、設定で送信待ちの状態を更新してください。"));
+        SetStatus(_syncTextFactory!);
+    }
+    private bool InitializeHistoryOutbox()
+    {
+        if(_store.HasSettingsLoadFailure || _historyWorkerRunning)return false;
         try
         {
-            await _historyQueue.WaitAsync(ct);
-            try
+            var session=_store.InitializeHistoryOutbox(_settings.SyncHistory,_settings.Incognito);
+            _historyOutboxEpoch=session.Epoch;_historyOutboxReady=true;_historyOutboxFaulted=false;
+            if(!session.Enabled && _settings.SyncHistory)
             {
-                ct.ThrowIfCancellationRequested();
-                if(_store.HasSettingsLoadFailure || !_settings.SyncHistory || _settings.Incognito || account!=_settings.AccountKey)return;
-                started=true;
-                TrySaveSyncStatus(account,video.Id,"sending");
-                var sent=await _youtube.MarkWatchedAsync(video.Url,ct);
-                ct.ThrowIfCancellationRequested();
-                if(account!=_settings.AccountKey)return;
-                TrySaveSyncStatus(account,video.Id,sent?"sent":"failed");
-                if(_current?.Id==video.Id)SetSyncUiText(()=>sent?UiText.T("시청 기록 전송됨 · 계정 반영은 ‘YouTube 기록 확인’에서 확인할 수 있습니다.","Watch history sent · Check its account status with “Check YouTube history”.","再生履歴を送信済み・アカウントへの反映は「YouTube 履歴を確認」で確認できます。"):UiText.T("시청 기록 전송 실패 · 로컬 이어보기는 저장되었습니다.","Watch history could not be sent · The local resume position was saved.","再生履歴の送信に失敗・ローカルの再開位置は保存済みです。"));
+                // An OFF persisted in SQLite wins over an older settings JSON.
+                _settings.SyncHistory=false;RestoreHistorySyncCheck();TrySaveSettings();
             }
-            finally{_historyQueue.Release();}
+            return true;
         }
-        catch(OperationCanceledException)
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException)
+        {HistoryOutboxStorageFailure();return false;}
+    }
+    private void QueueHistoryOutbox(VideoItem video)
+    {
+        if(!CanRecordHistoryOutbox)return;
+        if(_pendingHistoryDraft is null)
         {
-            if(started){TrySaveSyncStatus(account,video.Id,"cancelled");if(account==_settings.AccountKey && _current?.Id==video.Id)SetSyncUiText(()=>UiText.T("시청 기록 전송 취소 · 이미 전송된 요청의 계정 반영 여부는 확인되지 않았습니다.","Watch history sending canceled · Account status of requests already sent has not been confirmed.","再生履歴の送信をキャンセル・送信済みリクエストのアカウントへの反映は未確認です。"));}
+            _pendingHistoryDraft=new(_historyEventId,_settings.AccountKey,HistoryOutboxChannel,_historyOutboxEpoch,video.Id);
+            _historyDraftHeld=HistoryOutboxServicePaused;
         }
-        catch(Exception ex)when(ex is IOException or Win32Exception or InvalidDataException){TrySaveSyncStatus(account,video.Id,"failed");}
+        TryPersistHistoryDraft();
+    }
+    private bool TryPersistHistoryHold()
+    {
+        if(_pendingHistoryHold is not {} scope)return true;
+        try
+        {
+            _store.HoldHistoryOutboxScope(scope.Account,scope.Channel);
+            _pendingHistoryHold=null;return true;
+        }
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException or ArgumentException)
+        {HistoryOutboxStorageFailure();return false;}
+    }
+    private bool TryPersistHistoryDraft()
+    {
+        // A failed terminal/hold transaction must not turn a normal restart
+        // into implicit consent to drain the remaining backlog.
+        if(!TryPersistHistoryHold())return false;
+        if(_pendingHistoryDraft is not {} draft)return true;
+        try
+        {
+            if(_historyDraftHeld)
+            {
+                PreserveRevokedHistoryDraft();RefreshHistoryOutboxUi();return true;
+            }
+            if(!_store.EnqueueHistoryOutbox(draft.EventId,draft.Account,draft.Channel,draft.Epoch,draft.VideoId))
+                throw new InvalidDataException("The pending history permission is no longer current.");
+            _pendingHistoryDraft=null;_historyDraftHeld=false;
+            StartHistoryOutboxWorker();RefreshHistoryOutboxUi();return true;
+        }
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException or ArgumentException)
+        {HistoryOutboxStorageFailure();return false;}
+    }
+    private void PauseHistoryOutbox()
+    {
+        _historyAccountValidated=false;
+        _historyCts.Cancel();
+        if(!TryPersistHistoryDraft())throw new IOException("Could not preserve the pending history record.");
+        try
+        {
+            var session=_store.HoldHistoryOutbox();_historyOutboxEpoch=session.Epoch;
+            _historyOutboxServicePause=null;
+            _historyWatch.Reset();_historyEventId=Guid.NewGuid().ToString("N");
+            RefreshHistoryOutboxUi();
+        }
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException)
+        {HistoryOutboxStorageFailure();throw;}
+    }
+    private void StartHistoryOutboxWorker()
+    {
+        if(!CanSendHistoryOutbox)return;
+        if(_historyWorkerRunning){_historyWakeRequested=true;return;}
+        if(_historyCts.IsCancellationRequested){_historyCts.Dispose();_historyCts=new();}
+        _historyWorkerRunning=true;_historyWakeRequested=false;
+        _historyWorkerTask=RunHistoryOutboxAsync(_settings.AccountKey,HistoryOutboxChannel,_historyOutboxEpoch,_accountCts.Token,_historyCts.Token);
+    }
+    private bool HistoryOutboxScopeCurrent(string account,string channel,string epoch)=>
+        CanSendHistoryOutbox && account==_settings.AccountKey && channel==HistoryOutboxChannel && epoch==_historyOutboxEpoch;
+    private async Task RunHistoryOutboxAsync(string account,string channel,string epoch,CancellationToken accountToken,CancellationToken historyToken)
+    {
+        // Assign the tracked Task before any synchronous completion can re-enter.
+        await Task.Yield();
+        using var cancellation=CancellationTokenSource.CreateLinkedTokenSource(accountToken,historyToken);
+        var token=cancellation.Token;HistoryOutboxItem? claimed=null;
+        var consecutiveUnconfirmed=0;
+        try
+        {
+            while(!token.IsCancellationRequested && HistoryOutboxScopeCurrent(account,channel,epoch))
+            {
+                // A previous failed process may still be owned by recovery. Do
+                // not launch another history process until its exit is proven.
+                await ProcessRunner.DrainRecoveryAsync();
+                token.ThrowIfCancellationRequested();
+                if(!HistoryOutboxScopeCurrent(account,channel,epoch))break;
+                _historyWakeRequested=false;
+                claimed=_store.ClaimNextHistoryOutbox(account,channel,epoch);
+                if(claimed is null)break;
+                var state="unknown";string? code=null;
+                try
+                {
+                    token.ThrowIfCancellationRequested();
+                    if(!HistoryOutboxScopeCurrent(account,channel,epoch))throw new OperationCanceledException(token);
+                    // The committed inflight state precedes ALL external effects.
+                    // No title, URL, cookie, or token is stored in the outbox.
+                    var sent=await _youtube.MarkWatchedAsync("https://www.youtube.com/watch?v="+claimed.VideoId,token);
+                    token.ThrowIfCancellationRequested();
+                    state=sent?"sent":"failed";
+                }
+                catch(OperationCanceledException){code="interrupted";}
+                catch(YouTubeAccessException error)
+                {
+                    code=error.Code;
+                    // Missing/ambiguous acknowledgements do not prove failure.
+                    state=code is "network" or "generic"?"unknown":"failed";
+                }
+                catch(Exception error)when(error is IOException or Win32Exception or UnauthorizedAccessException or InvalidOperationException or TimeoutException or ArgumentException)
+                {code="unconfirmed";}
+                // Explicit account/service errors stop this scope immediately.
+                // Two consecutive ambiguous results also stop this drain as a
+                // precaution; that does not classify their cause as account-wide.
+                consecutiveUnconfirmed=state=="unknown" && code!="interrupted"?consecutiveUnconfirmed+1:0;
+                var holdRemaining=code is "bot" or "rate_limit" or "session" || consecutiveUnconfirmed>=2;
+                if(holdRemaining)
+                {
+                    _historyOutboxServicePause=(account,channel);
+                    _pendingHistoryHold=(account,channel);
+                    _historyWakeRequested=false;
+                    if(_pendingHistoryDraft is {} draft && draft.Account==account && draft.Channel==channel)
+                        _historyDraftHeld=true;
+                }
+                _store.CompleteHistoryOutbox(claimed.EventId,state,code,holdRemaining:holdRemaining);
+                if(holdRemaining)_pendingHistoryHold=null;
+                if(account==_settings.AccountKey && channel==HistoryOutboxChannel && _current?.Id==claimed.VideoId)
+                    SetSyncUiText(()=>state=="sent"?UiText.T("시청 기록 전송됨 · YouTube 계정 반영 여부는 별도로 확인하세요.","Watch history sent · Check its YouTube account status separately.","再生履歴を送信しました・YouTube アカウントへの反映は別途確認してください。"):UiText.T("시청 기록 전송 실패 또는 결과 미확인 · 기록은 보존하며 자동 재전송하지 않습니다.","Watch history failed or its result is unconfirmed · The record is kept and will not be resent automatically.","再生履歴の送信に失敗したか、結果が未確認です・記録は保持し、自動再送しません。"));
+                claimed=null;
+                if(holdRemaining)
+                    SetSyncUiText(()=>UiText.T("시청 기록 추가 전송을 보류했습니다. 연결·요청 제한을 확인한 뒤 설정에서 보류 기록 전송을 재개하세요. 이미 시도한 기록은 다시 보내지 않습니다.","Further watch history sending is on hold. Check the connection or request limit, then resume held records in Settings. Attempted records will not be sent again.","再生履歴の追加送信を保留しました。接続やリクエスト制限を確認し、設定から保留中の履歴を再開してください。試行済みの記録は再送しません。"));
+                RefreshHistoryOutboxUi();
+            }
+        }
+        catch(OperationCanceledException){ }
+        catch(Exception)
+        {
+            // Observe all failures on this single tracked worker. If the result
+            // commit failed, startup recovery turns the retained inflight row
+            // into unknown; it must never become pending again automatically.
+            HistoryOutboxStorageFailure();
+        }
+        finally
+        {
+            if(claimed is not null)
+            {
+                try
+                {
+                    var hold=_pendingHistoryHold is {} scope && scope.Account==claimed.Account && scope.Channel==claimed.Channel;
+                    _store.CompleteHistoryOutbox(claimed.EventId,"unknown","interrupted",holdRemaining:hold);
+                    if(hold)_pendingHistoryHold=null;
+                }
+                catch(Exception error)when(IsStorageError(error) || error is InvalidDataException or ArgumentException)
+                {HistoryOutboxStorageFailure();}
+            }
+            _historyWorkerRunning=false;
+            RefreshHistoryOutboxUi();
+            if(_historyWakeRequested && !_closing)StartHistoryOutboxWorker();
+        }
+    }
+    private void RefreshHistoryOutboxUi()
+    {
+        if(HistoryOutboxStateText is null)return;
+        HistoryOutboxResumeButton.IsEnabled=false;
+        if(_settings.Incognito)
+        {HistoryOutboxStateText.Text=UiText.T("시크릿 모드에서는 대기 기록을 읽거나 전송하지 않습니다.","Pending records are not read or sent in incognito mode.","シークレットモードでは送信待ちの記録を読み取ったり送信したりしません。");return;}
+        if(!_historyOutboxReady || _historyOutboxFaulted)
+        {HistoryOutboxStateText.Text=UiText.T("대기열 처리가 중지되었습니다. 저장소를 확인한 뒤 새로고침하세요.","Queue processing is stopped. Check storage, then refresh.","待機列の処理を停止しています。保存先を確認して更新してください。");return;}
+        if(HistoryOutboxChannel.Length==0)
+        {HistoryOutboxStateText.Text=UiText.T("채널을 연결하면 해당 계정의 대기 상태를 확인할 수 있습니다.","Connect a channel to see its pending status.","チャンネルを接続すると送信待ちの状態を確認できます。");return;}
+        if(!DataStore.IsHistoryOutboxChannel(HistoryOutboxChannel))
+        {HistoryOutboxStateText.Text=UiText.T("채널 식별자 형식을 확인하지 못했습니다. 채널 목록을 갱신하세요. 대기 기록을 새로 만들지 않습니다.","The channel identifier format is invalid. Refresh the channel list. No new pending records will be created.","チャンネル識別子の形式を確認できません。チャンネル一覧を更新してください。新しい送信待ちの記録は作成しません。");return;}
+        try
+        {
+            var counts=_store.GetHistoryOutboxCounts(_settings.AccountKey,HistoryOutboxChannel);
+            HistoryOutboxStateText.Text=UiText.F("대기 {0:N0} · 보류 {1:N0} · 결과 미확인 {2:N0} · 실패 {3:N0}","Pending {0:N0} · Held {1:N0} · Unconfirmed {2:N0} · Failed {3:N0}","送信待ち {0:N0} · 保留 {1:N0} · 結果未確認 {2:N0} · 失敗 {3:N0}",counts.Pending,counts.Held,counts.Unknown,counts.Failed);
+            if(!_historyAccountValidated)
+                HistoryOutboxStateText.Text+=UiText.T(" · 전송하려면 채널 목록을 갱신하세요."," · Refresh the channel list before sending."," ・送信するにはチャンネル一覧を更新してください。");
+            if(HistoryOutboxServicePaused)
+                HistoryOutboxStateText.Text+=UiText.T(" · 오류 후 추가 전송 보류. 확인 후 직접 재개하세요."," · Further sending held after an error. Check the issue, then resume manually."," ・エラー後の追加送信を保留中です。確認後に手動で再開してください。");
+            HistoryOutboxResumeButton.IsEnabled=CanResumeHistoryOutbox && (counts.Held>0 || HistoryOutboxServicePaused);
+        }
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException or ArgumentException or OverflowException)
+        {HistoryOutboxStorageFailure();HistoryOutboxStateText.Text=_syncMessage;}
+    }
+    private void HistoryOutboxResume_Click(object sender,RoutedEventArgs e)
+    {
+        if(!CanResumeHistoryOutbox || !TryPersistHistoryDraft())return;
+        try
+        {
+            _store.ResumeHeldHistoryOutbox(_settings.AccountKey,HistoryOutboxChannel,_historyOutboxEpoch);
+            _historyOutboxServicePause=null;
+            StartHistoryOutboxWorker();RefreshHistoryOutboxUi();
+        }
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException or ArgumentException)
+        {HistoryOutboxStorageFailure();RefreshHistoryOutboxUi();}
+    }
+    private void HistoryOutboxRefresh_Click(object sender,RoutedEventArgs e)
+    {
+        if(AccountWorkBlocked || _channelReloadBusy || _settings.Incognito)return;
+        if(!_historyWorkerRunning && InitializeHistoryOutbox() && TryPersistHistoryDraft())StartHistoryOutboxWorker();
+        RefreshHistoryOutboxUi();
     }
     private static bool IsStorageError(Exception error)=>error is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException;
-    private void TrySaveSyncStatus(string account,string videoId,string status)
-    {
-        try{_store.SetSyncStatus(account,videoId,status);}
-        catch(Exception error)when(IsStorageError(error))
-        {Trace.TraceError("FK_YT local history status: {0}",error.GetType().Name);}
-    }
     private bool TrySaveSettings()
     {
         try{_store.SaveSettings(_settings);return true;}
@@ -660,7 +873,7 @@ public partial class MainWindow : Window
     {
         CancelLiveRecovery();
         if(!ClosePopoutForPlaybackStop())return false;
-        if(!_closing && !SavePosition())return false;
+        if(!_closing && (!TryPersistHistoryDraft() || !SavePosition()))return false;
         var generation=++_videoGeneration;_videoMetadataGeneration++;_videoCts?.Cancel();_commentsCts?.Cancel();_qualityCts?.Cancel();_current=null;_snapshot=null;_pausedPlaybackIntent=false;_playPauseIntent=null;ResetSeekInteraction();
         RefreshLiveControls(null);
         ResetPlaybackExtras();_autoplaySeen.Clear();_playbackTrail.Clear();_playbackTrailRevision++;UpdateSkipButtons();
@@ -881,7 +1094,7 @@ public partial class MainWindow : Window
         _ratingsAccountBusy=_accountBusyDepth>0;
         if(entering)
         {
-            CancelLiveRecovery();
+            CancelLiveRecovery();_historyCts.Cancel();
             _pendingVolume=null;
             // Invalidate operations already awaiting playback/worker completion before
             // draining the old session. UI disabling alone does not stop their continuations.
@@ -892,7 +1105,7 @@ public partial class MainWindow : Window
             _relatedCts?.Cancel();_prefetchCts?.Cancel();_captionCts?.Cancel();
             CancelSubtitleOperations();ResetSubtitleCatalog();ResetVideoDescription();CancelAuthenticationSkip(clearNotice:true);_ratingRevision++;_ratingReadCts?.Cancel();_ratingSendCts?.Cancel();_dislikeStatsCts?.Cancel();
         }
-        if(!busy)UpdateSessionLabel();
+        if(!busy){UpdateSessionLabel();StartHistoryOutboxWorker();RefreshHistoryOutboxUi();}
         UpdateRatingControls();
     }
     private async void ConnectFirefox_Click(object sender,RoutedEventArgs e)
@@ -903,6 +1116,7 @@ public partial class MainWindow : Window
         try
         {
             var recovery=_session.HasSessionRecoveryFailure;var different=DifferentAccountCheck.IsChecked==true || recovery;
+            PauseHistoryOutbox();
             var key=await ResetAccountAsync();if(recovery)key=Guid.NewGuid().ToString("N");
             var token=_accountCts.Token;
             await PersistSessionChangeAsync(async()=>
@@ -926,6 +1140,7 @@ public partial class MainWindow : Window
         try
         {
             var recovery=_session.HasSessionRecoveryFailure;var different=DifferentAccountCheck.IsChecked==true || recovery;
+            PauseHistoryOutbox();
             var key=await ResetAccountAsync();if(recovery)key=Guid.NewGuid().ToString("N");
             await PersistSessionChangeAsync(()=>
             {
@@ -946,6 +1161,7 @@ public partial class MainWindow : Window
         SetAccountBusy(true);
         try
         {
+            PauseHistoryOutbox();
             await ResetAccountAsync();
             await PersistSessionChangeAsync(()=>
             {
@@ -954,7 +1170,7 @@ public partial class MainWindow : Window
             UpdateSessionLabel();
         }
         catch(OperationCanceledException)when(_closing){}
-        catch(Exception error)when(IsStorageError(error)){SetStatus(()=>UiText.T("연결 해제 또는 설정 저장을 완료하지 못했습니다. 현재 연결 상태를 확인해 주세요.","Could not finish disconnecting or saving settings. Check the current connection state.","接続解除または設定の保存を完了できませんでした。現在の接続状態を確認してください。"));UpdateSessionLabel();}
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException){SetStatus(()=>UiText.T("연결 해제 또는 설정 저장을 완료하지 못했습니다. 현재 연결 상태를 확인해 주세요.","Could not finish disconnecting or saving settings. Check the current connection state.","接続解除または設定の保存を完了できませんでした。現在の接続状態を確認してください。"));UpdateSessionLabel();}
         finally{SetAccountBusy(false);DisplaySelectedChannel();UpdateSessionLabel();}
     }
     private void BrowseProfile_Click(object sender,RoutedEventArgs e){var dialog=new OpenFolderDialog{Title=UiText.T("Firefox 프로필 폴더 선택","Select Firefox profile folder","Firefox プロファイルフォルダーを選択")};if(dialog.ShowDialog(this)==true){var list=SessionService.ListFirefoxProfiles(out _profileListWarning).ToList();var p=new FirefoxProfile(Path.GetFileName(dialog.FolderName),dialog.FolderName);list.Add(p);ProfileCombo.ItemsSource=list;ProfileCombo.SelectedItem=p;ProfileCombo.ToolTip=string.IsNullOrWhiteSpace(_profileListWarning)?null:_profileListWarning;if(_profileListWarning!=null)SetStatus(_profileListWarning);}}
@@ -966,11 +1182,55 @@ public partial class MainWindow : Window
     }
     private async void SyncSetting_Changed(object sender,RoutedEventArgs e)
     {
-        if(!_ready)return;
-        _settings.SyncHistory=HistorySyncCheck.IsChecked==true;TrySaveSettings();
-        if(_settings.SyncHistory)return;
-        var previous=_historyCts;_historyCts=new();previous.Cancel();
-        try{await Task.WhenAll(_historyTasks.ToArray());}catch(Exception error){Trace.TraceError("FK_YT history drain: {0}",error.GetType().Name);}finally{previous.Dispose();}
+        if(!_ready || _updatingHistorySync)return;
+        if(AccountWorkBlocked){RestoreHistorySyncCheck();return;}
+        var enabled=HistorySyncCheck.IsChecked==true;
+        if(enabled==_settings.SyncHistory)return;
+        // A new consent period must not overwrite an older uncommitted draft.
+        if(enabled && !TryPersistHistoryDraft()){RestoreHistorySyncCheck();return;}
+        _settings.SyncHistory=enabled;
+        _settings.HistorySyncPreferenceVersion=AppSettings.CurrentHistorySyncPreferenceVersion;
+        if(!enabled)
+        {
+            _historyCts.Cancel(); // Revoke before either persistent write.
+            if(_pendingHistoryDraft is not null)_historyDraftHeld=true;
+        }
+        _historyWatch.Reset();_historyEventId=Guid.NewGuid().ToString("N");
+        if(enabled && !TrySaveSettings())
+        {_settings.SyncHistory=false;RestoreHistorySyncCheck();return;}
+        var persisted=false;
+        try
+        {
+            var session=_store.SetHistoryOutboxEnabled(enabled);
+            _historyOutboxEpoch=session.Epoch;_historyOutboxReady=true;persisted=true;
+            if(enabled)_historyOutboxServicePause=null;
+            // An uncommitted draft cannot become new work after revocation.
+            // Persist it as held below before forgetting it.
+            if(!enabled && _pendingHistoryDraft is not null)
+                PreserveRevokedHistoryDraft();
+        }
+        catch(Exception error)when(IsStorageError(error) || error is InvalidDataException or ArgumentException)
+        {HistoryOutboxStorageFailure();}
+        if(enabled && !persisted)
+        {_settings.SyncHistory=false;RestoreHistorySyncCheck();TrySaveSettings();}
+        var saved=enabled?persisted:TrySaveSettings();
+        if(saved)HistorySyncMigrationNotice.Visibility=Visibility.Collapsed;
+        if(!enabled && !saved)
+            SetStatus(()=>UiText.T("시청 기록 전송은 중지했지만 설정 파일 저장에 실패했습니다. 대기열 권한 저장도 실패했다면 다음 실행 때 설정을 다시 확인하세요.","Watch history sending stopped, but saving settings failed. If queue permission storage also failed, check the setting again next time.","再生履歴の送信は停止しましたが、設定ファイルの保存に失敗しました。待機列の権限保存も失敗した場合、次回起動時に設定を再確認してください。"));
+        if(!enabled)await _historyWorkerTask;
+        StartHistoryOutboxWorker();RefreshHistoryOutboxUi();
+    }
+    private void PreserveRevokedHistoryDraft()
+    {
+        if(_pendingHistoryDraft is not {} draft)return;
+        _store.PreserveHeldHistoryOutbox(draft.EventId,draft.Account,draft.Channel,draft.Epoch,draft.VideoId);
+        _pendingHistoryDraft=null;_historyDraftHeld=false;
+    }
+    private void RestoreHistorySyncCheck()
+    {
+        _updatingHistorySync=true;
+        try{HistorySyncCheck.IsChecked=_settings.SyncHistory;}
+        finally{_updatingHistorySync=false;}
     }
     private async void PlaylistUrl_Click(object sender,RoutedEventArgs e){if(AccountWorkBlocked)return;if(!YouTubeService.TryPlaylistUrl(PlaylistUrlBox.Text,out var url)){SetStatus(()=>UiText.T("YouTube 재생목록 주소를 입력하세요.","Enter a YouTube playlist URL.","YouTube の再生リスト URL を入力してください。"));return;}_settings.PlaylistUrl=url;PlaylistUrlBox.Text=url;TrySaveSettings();if(await StopPlaybackAsync())await OpenFeedWithUiTitleAsync(url,()=>UiText.T("재생목록","Playlist","再生リスト"));}
     private void OpenData_Click(object sender,RoutedEventArgs e)=>Process.Start(new ProcessStartInfo("explorer.exe"){ArgumentList={_paths.Data},UseShellExecute=true});
@@ -1001,12 +1261,47 @@ public partial class MainWindow : Window
             if(!AccountWorkBlocked && view==_viewGeneration && account==_settings.AccountKey){SetFeedUiText(()=>UiText.T("로컬 기록을 읽지 못했습니다. 잠시 후 다시 열어 주세요.","Could not read local history. Open it again later.","ローカル履歴を読み取れませんでした。しばらくしてから開き直してください。"));SetStatus(()=>UiText.T("시청 기록 파일이 사용 중이거나 읽을 수 없습니다.","The watch history file is in use or cannot be read.","再生履歴ファイルが使用中か、読み取りできません。"));}
         }
     }
-    private static string SyncLabel(string value)=>value switch{"sent"=>UiText.T("전송됨 · 반영 미확인","Sent · Account update unconfirmed","送信済み・反映未確認"),"confirmed"=>UiText.T("계정 기록에서 확인됨","Confirmed in account history","アカウントの履歴で確認済み"),"failed"=>UiText.T("전송 실패","Sending failed","送信失敗"),"sending"=>UiText.T("전송 중","Sending","送信中"),"cancelled"=>UiText.T("전송 취소 · 반영 미확인","Sending canceled · Account update unconfirmed","送信キャンセル・反映未確認"),_=>UiText.T("로컬 저장","Saved locally","ローカル保存")};
+    private static string SyncLabel(string value)=>value switch{"sent"=>UiText.T("전송됨 · 반영 미확인","Sent · Account update unconfirmed","送信済み・反映未確認"),"confirmed"=>UiText.T("계정 기록에서 확인됨","Confirmed in account history","アカウントの履歴で確認済み"),"failed"=>UiText.T("전송 실패","Sending failed","送信失敗"),"sending" or "inflight"=>UiText.T("전송 중","Sending","送信中"),"pending"=>UiText.T("전송 대기","Pending","送信待ち"),"held"=>UiText.T("전송 보류","Held","送信保留"),"unknown"=>UiText.T("결과 미확인 · 자동 재전송 안 함","Unconfirmed · No automatic resend","結果未確認・自動再送なし"),"cancelled"=>UiText.T("전송 취소 · 반영 미확인","Sending canceled · Account update unconfirmed","送信キャンセル・反映未確認"),_=>UiText.T("로컬 저장","Saved locally","ローカル保存")};
     private bool _allowClose;
     private readonly List<string> _shutdownErrors=[];
     private async void Window_Closing(object? sender,CancelEventArgs e)
     {
-        if(_allowClose)return;e.Cancel=true;if(_closing)return;_closing=true;IsEnabled=false;
+        if(_allowClose)return;e.Cancel=true;if(_closing)return;
+        // Keep the only uncommitted record alive if storage is unavailable.
+        // A forced OS termination can still lose it; never report it as saved.
+        if(!TryPersistHistoryDraft())
+        {
+            SetSyncUiText(()=>UiText.T("대기 기록을 저장하지 못해 종료를 중단했습니다. 저장소 문제를 해결한 뒤 다시 닫아 주세요. 강제 종료하면 미저장 기록이 사라질 수 있습니다.","Closing was stopped because a pending record could not be saved. Resolve the storage problem and close again. Force quitting can lose the unsaved record.","送信待ちの記録を保存できないため終了を中止しました。保存先の問題を解決してから閉じてください。強制終了すると未保存の記録が失われる場合があります。"));
+            SetStatus(_syncTextFactory!);return;
+        }
+        _closing=true;IsEnabled=false;
+        // Finish the history producer BEFORE any teardown awaits. A request
+        // already completing can still create a scope-hold intent after the
+        // first close check. Keep the window usable if that intent cannot save.
+        var closingHistoryWorker=_historyWorkerTask;
+        try
+        {
+            _historyCts.Cancel();
+            await closingHistoryWorker.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch(Exception error)
+        {
+            _closing=false;IsEnabled=true;
+            // An aborted close must not strand unattempted pending work. Use
+            // the existing single-worker wake path: a late worker finishes
+            // its terminal commit before a fresh token may drain the queue.
+            // A faulted/canceled task is not a wait timeout and must not loop.
+            if(error is TimeoutException && !closingHistoryWorker.IsFaulted && !closingHistoryWorker.IsCanceled)
+                StartHistoryOutboxWorker();
+            SetStatus(()=>UiText.T("시청 기록 작업의 종료를 확인하지 못해 창을 닫지 않았습니다. 잠시 후 다시 닫아 주세요.","The window was kept open because watch history work has not finished. Try closing again shortly.","再生履歴の処理終了を確認できないため、ウィンドウを閉じませんでした。しばらくしてからもう一度閉じてください。"));
+            return;
+        }
+        if(!TryPersistHistoryDraft())
+        {
+            _closing=false;IsEnabled=true;
+            SetStatus(()=>UiText.T("종료 중 생긴 기록 또는 보류 상태를 저장하지 못했습니다. 저장소 문제를 해결한 뒤 다시 닫아 주세요.","A record or hold created during closing could not be saved. Resolve the storage problem, then close again.","終了中に生じた記録または保留状態を保存できませんでした。保存先の問題を解決してから、もう一度閉じてください。"));
+            return;
+        }
         void RecordFailure(string operation,Exception error)
         {
             _shutdownErrors.Add(operation+": "+error.GetType().Name);
@@ -1036,6 +1331,7 @@ public partial class MainWindow : Window
             Cleanup("feed cancellation",()=>_feedCts?.Cancel());Cleanup("video cancellation",()=>_videoCts?.Cancel());
             Cleanup("comments cancellation",()=>_commentsCts?.Cancel());Cleanup("quality cancellation",()=>_qualityCts?.Cancel());
             Cleanup("position save",()=>SavePosition());
+            Cleanup("history draft save",()=>{if(!TryPersistHistoryDraft())throw new IOException("The pending history record was not saved.");});
             await CleanupAsync("download drain",CancelDownloadAsync);
             await CleanupAsync("account drain",CancelAccountWorkAsync);
             // Mutations are separate from account reads: a change may itself

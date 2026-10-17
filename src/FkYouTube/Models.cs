@@ -76,13 +76,15 @@ public sealed record YouTubeChannel
 }
 public sealed class AppSettings
 {
+    public const int CurrentHistorySyncPreferenceVersion = 1;
     public string UiLanguage { get; set; } = "ko";
     public string AuthMode { get; set; } = "guest";
     public string FirefoxProfile { get; set; } = "";
     public string AccountKey { get; set; } = "guest";
     public int MaxHeight { get; set; } = 0;
     public int QualityPreferenceVersion { get; set; } = 0;
-    public bool SyncHistory { get; set; } = true;
+    public int HistorySyncPreferenceVersion { get; set; } = 0;
+    public bool SyncHistory { get; set; } = false;
     public bool HideMembersOnly { get; set; } = true;
     public bool AutoPlayNext { get; set; } = true;
     public bool Incognito { get; set; }

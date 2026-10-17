@@ -25,7 +25,7 @@ public sealed class RuntimePaths
     public RuntimePaths(string? root = null)
     {
         Root = NormalizeRoot(root ?? FindRoot());
-        Data = ResolveDataPath(Root, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        Data = NormalizeRoot(ResolveDataPath(Root, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)));
         FileBoundary.EnsureRegularPath(Data);
         Directory.CreateDirectory(Data);
         FileBoundary.EnsureRegularPath(Data);
@@ -49,7 +49,18 @@ public sealed class RuntimePaths
             throw new InvalidOperationException("The current user's local application data directory is unavailable.");
         return Path.Combine(NormalizeRoot(localApplicationData), "FK_YT", "data");
     }
-    // Invoke only after acquiring the app instance mutex. Selection is frozen
+    // A file handle covers every root and Windows session using this Data folder.
+    // Keep the file after closing: only the held handle denotes ownership, and
+    // deleting it could let a later process lock a replacement file instead.
+    internal FileStream AcquireDataOwnership()
+    {
+        var path = Path.Combine(Data, "instance.lock");
+        FileBoundary.EnsureRegularPath(path);
+        var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        try { FileBoundary.EnsureRegularPath(path); return stream; }
+        catch { stream.Dispose(); throw; }
+    }
+    // Invoke only after acquiring the root mutex and Data ownership. Selection is frozen
     // for this RuntimePaths object, so long-lived workers and mpv cannot mix sets.
     public async Task InitializeToolchainAsync(CancellationToken cancellationToken = default)
     {
