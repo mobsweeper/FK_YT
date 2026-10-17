@@ -49,6 +49,6 @@ Review each downloaded version's notices and corresponding sources before redist
 
 5. Verification and privacy
 
-Earlier preview6 offline regressions, installer fixtures and package checks are not newly passed real YouTube or final 1.1 installation tests. The final 1.1 UAC flow, installation time, installation, installed-app playback, update/removal, fresh long playback, full 6 GiB fill and official tool activation remain separate unverified items.
+Earlier preview6 offline regressions, installer fixtures and package checks are not newly passed real YouTube or final 1.1 installation tests. The maintainer confirmed Windows 10/11 installation, installed-app launch/playback, installer updates and removal on 2026-10-17. Detailed UAC/permissions, installation timing, fresh long playback, full live-cache fill and official experimental tool activation remain outside that confirmation.
 
 Incognito does not hide your IP or delete deliberate downloads. Use a dedicated Firefox profile for YouTube. Never attach cookies, authentication tokens, data folders or personal backups to bug reports. External components retain their own licenses; preserve original notices and source-access information.

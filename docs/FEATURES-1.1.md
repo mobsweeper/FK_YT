@@ -28,6 +28,21 @@ Live chat, scheduled-stream waiting and recording are not included. A larger loc
 
 Ordinary videos retain a 15-second forward target and **32 MiB forward / 8 MiB backward budgets per demuxer**. Confirmed live playback uses a **6 GiB (6,442,450,944-byte) backward budget per demuxer**. The forward budget remains 32 MiB; unused forward capacity is not donated to the backward budget.
 
+These figures add the configured forward and backward budgets; they are **not strict total-RAM ceilings**. They apply to compressed media packets, not decoded frames.
+
+| Playback/cache instance | Forward | Backward | Configured sum |
+| --- | ---: | ---: | ---: |
+| Current ordinary video (including its audio) | 32 MiB | 8 MiB | about 40 MiB |
+| One next-video preload (including its audio) | 32 MiB | 8 MiB | up to another configured 40 MiB |
+| Current ordinary video + one next-video preload | — | — | about 80 MiB combined configured budget |
+| One confirmed live stream (including its audio) | 32 MiB | 6 GiB = 6,144 MiB | 6,176 MiB = 6.03125 GiB |
+
+**Separate video/audio URLs do not normally mean two full caches in FK_YT.** Its split-stream playback path joins them into one EDL timeline; the timeline shares the packet cache, and its child demuxers do not keep another full cache. There is no fixed video-versus-audio split within that shared budget. Only genuinely independent top-level demuxers would each receive a budget, so the normal live path is not described as “6 GiB for video plus 6 GiB for audio.” See the [bundled mpv cache settings](https://github.com/mpv-player/mpv/blob/ec38361c56b2d91e417c4c3e58184535d1a1aa2e/DOCS/man/options.rst#L4279-L4324) and [timeline implementation](https://github.com/mpv-player/mpv/blob/ec38361c56b2d91e417c4c3e58184535d1a1aa2e/demux/demux_timeline.c#L614-L618).
+
+For ordinary videos, mpv can donate unused forward space to the backward cache: 8 MiB is its baseline backward setting, not a separate hard cap; the combined budget remains 40 MiB. A preload normally has little or no played-back data, so the 80 MiB row is a conservative sum of settings, not expected initial usage. Known live playback disables this donation and next-video preloading. mpv can slightly exceed its packet-budget settings for technical reasons.
+
+Thumbnail memory (96 MiB estimated image data), decoders, GPU textures, UI, subtitles, network buffers and packet-pool overhead are separate. For example, the listed packet budgets plus the thumbnail budget sum to about **176 MiB for current+next ordinary videos**, or **6.125 GiB for one live stream**; these partial sums still do not bound application/process RAM. Thumbnail disk cache (512 MiB) is separate from RAM, and playback disk caching is disabled. Buffers grow as data arrives rather than being fully preallocated.
+
 The cache grows as data arrives. **6 GiB is not allocated in advance and is not a whole-process RAM limit.** Decoder, audio/video and application allocations are separate. It is not a guarantee that every past segment stays seekable or a guaranteed number of rewind minutes. The 10 MiB HTTP request size is a separate per-request limit.
 
 If live status arrives after loading and next-video preload was already attempted, the current playback keeps its original budget to avoid changing another preloaded entry's demuxer. Reopening the now-known live stream with LIVE applies the live budget. Cache changes are scoped to the exact playing native entry so a late response cannot change the next video's options.
@@ -58,6 +73,6 @@ Player IPC checks the connected server against the owned mpv process before send
 
 The latest preview6 work recorded 61/61 offline regression groups and 249 offline updater assertions, plus focused checks of the exact normal DLL. Installer preparation recorded 29/29 PowerShell fixtures, 27/27 packaging fixtures, payload identity checks and an NSIS compile. Those results are distinct from final 1.1 compilation/packaging and from actual public YouTube playback. They are not newly rerun whole-suite results for the version-only promotion.
 
-Actual authenticated/live playback, a fresh two-hour autoplay/live run, complete 6 GiB fill/memory pressure, official tool download/activation, and the final installer's real UAC/install/update/removal/time checks remain outside those results. A prior two-hour autoplay result on an earlier candidate does not establish a new 1.1 result. See [RELEASE-1.1.md](https://github.com/mobsweeper/FK_YT/blob/v1.1/docs/RELEASE-1.1.md#verification-scope).
+The maintainer subsequently confirmed Windows 10/11 installation, installed-app launch/playback, installer updates and removal on 2026-10-17. A detailed authenticated/live matrix, a fresh two-hour autoplay/live run, complete live-cache fill/memory pressure, official experimental tool download/activation, installation timing and detailed UAC/permission scenarios remain outside that confirmation. A prior two-hour autoplay result on an earlier candidate does not establish a new 1.1 result. See [RELEASE-1.1.md](https://github.com/mobsweeper/FK_YT/blob/main/docs/RELEASE-1.1.md#verification-scope).
 
 FK_YT's own code/documents remain MIT. Original external runtime notices and corresponding sources remain applicable to the unchanged bundled tools. See [license.md](https://github.com/mobsweeper/FK_YT/blob/v1.1/license.md) and the [licensing record](https://github.com/mobsweeper/FK_YT/blob/v1.1/docs/LICENSING-1.1.md); offline checks and source access are not legal certification.

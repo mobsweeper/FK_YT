@@ -10,6 +10,9 @@ namespace FkYouTube.Services;
 /// <summary>Manual, stable-only upstream downloads. Never changes the running set.</summary>
 public sealed class ToolchainUpdateService
 {
+    private static readonly string AppVersion = typeof(ToolchainUpdateService).Assembly.GetName().Version is { } version
+        ? new Version(version.Major, version.Minor, Math.Max(version.Build, 0)).ToString()
+        : "0.0.0";
     private readonly RuntimePaths _paths;
     private readonly HttpClient _http;
     private readonly Dictionary<string, ToolchainUpdateInfo> _issued = new(StringComparer.Ordinal);
@@ -389,7 +392,7 @@ public sealed class ToolchainUpdateService
         {
             ValidateOfficialUri(url);
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.ParseAdd("FK_YT/1.0 (manual-tool-update)");
+            request.Headers.UserAgent.ParseAdd($"FK_YT/{AppVersion} (manual-tool-update)");
             request.Headers.Accept.ParseAdd("application/vnd.github+json");
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(TimeSpan.FromSeconds(60));

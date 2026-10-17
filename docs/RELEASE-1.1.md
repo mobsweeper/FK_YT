@@ -41,7 +41,7 @@ The installer accepts Windows AMD64 build 19045 or later and installs into a sup
 
 The installed payload adds `FK_YT.install-mode`; preserve that marker. The installer does not automatically import portable or old per-user data. Close the app, preserve the original folder, and copy data only into an empty destination as the same Windows user. Do not merge SQLite databases. Saved sign-in information can require reconnection after a PC or Windows-user change.
 
-Uninstall preserves all users' settings, sign-in data, watch history, resume positions and downloads. There is no user-data deletion checkbox and no search of other user profiles. Added, modified or locked program-folder files may remain. Actual 1.1 installation/update/removal is a separate verification item below.
+Uninstall preserves all users' settings, sign-in data, watch history, resume positions and downloads. There is no user-data deletion checkbox and no search of other user profiles. Added, modified or locked program-folder files may remain. The maintainer confirmed Windows 10/11 installation, installed-app launch/playback, installer updates and removal on 2026-10-17; see the verification scope below.
 
 ## Installer changes
 
@@ -74,6 +74,14 @@ The following results belong to the **preview6 implementation and installer prep
 
 The normal 1.1.0 application was compiled using the preserved .NET 10.0.13 runtime cache. Product method IL and resources matched the clean normal preview6 implementation, with no playback-diagnostic types or PDBs in the output. This confirms the version promotion and normal build scope; it is not a rerun of the earlier whole suite. Final release checksums identify the packaged assets independently of the real-world items below.
 
-**Not newly verified for this release:** real YouTube/authenticated playback; a new two-hour autoplay/live run; filling or pressuring the complete 6 GiB live cache; official tool download and activation; the final installer's actual UAC flow, installation time, installation, installed-app launch/playback, update and removal; a clean Windows 11 standard-user environment; and SmartScreen behavior after a public download. Earlier checks of other builds do not establish those results.
+**Maintainer-confirmed after publication (2026-10-17):** installation, installed-app launch/playback, installer updates and removal on Windows 10 and Windows 11. This is the maintainer's reported verification, separate from the agent's prior offline build/fixture results. Additional OS edition/build, clean-system/standard-user conditions and account/live test details were not supplied.
+
+**Not established by that confirmation:** a new two-hour autoplay/live run; full live-cache fill/memory pressure; official experimental tool download/activation; installation timing; a detailed UAC/permissions matrix; a clean Windows 11 standard-user environment; and SmartScreen behavior after public download. Basic playback confirmation is not a complete authenticated/live test matrix.
 
 Public source access and matching checksums are distribution checks. Successful build/packaging does not establish account compatibility, uninterrupted long playback, every upstream ad variant, full server DVR, or a complete bit-for-bit rebuild of all external binaries. Exact historical supplier librsvg lock recovery and the external-source limits remain documented in the licensing record.
+
+## Post-release documentation and source changes (2026-10-17)
+
+The repository documentation incorporates the maintainer's Windows 10/11 confirmation above. The published v1.1 EXE, portable ZIP, application/installer source ZIPs, source supplements, checksums and tag remain unchanged; documents inside those frozen archives retain their publication-time verification statements.
+
+On the development branch, the manual tool updater now derives its User-Agent version from the application assembly instead of the fixed `FK_YT/1.0` string. The published v1.1 binary still sends the original string. This request-identification correction does not change update URLs, payloads or verification rules. It reaches executable users only in a future rebuilt package; changing README or source alone does not patch an installed app.

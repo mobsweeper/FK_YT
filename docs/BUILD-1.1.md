@@ -56,7 +56,7 @@ Use the separate **`FK_YT-1.1-installer-source.zip`** and follow its `docs/BUILD
 
 The installer adapts the exact portable payload and adds `FK_YT.install-mode` with `machine-v1` plus LF, installed-mode guidance, and NSIS/source-access notices. The same application DLL chooses `%LOCALAPPDATA%\FK_YT\data` for each Windows user when that marker is present. Without it, the portable app uses its local `data/` folder. A separate installed-app rebuild or source ZIP is unnecessary for 1.1.
 
-The installer uses NSIS Unicode/MUI2, English pages and zlib compression. It requests administrator permission, defaults to native 64-bit Program Files and preserves user data on removal. One complete fixed-payload SHA-256 pass remains in protected staging; path/type/length, ownership, rollback and removal checks remain. Actual UAC, installation time and final 1.1 installation/update/removal have not been verified by compilation alone.
+The installer uses NSIS Unicode/MUI2, English pages and zlib compression. It requests administrator permission, defaults to native 64-bit Program Files and preserves user data on removal. One complete fixed-payload SHA-256 pass remains in protected staging; path/type/length, ownership, rollback and removal checks remain. Compilation alone does not verify runtime installation. The maintainer separately confirmed Windows 10/11 installation, installed-app launch/playback, installer updates and removal on 2026-10-17; installation time and detailed UAC/permission scenarios remain unmeasured/unverified.
 
 ## Sources and verification
 

@@ -1,6 +1,6 @@
 # FK_YT 1.1
 
-**[한국어 안내](readme_KR.md)** · [English](readme_EN.md)
+**[한국어 안내](https://github.com/mobsweeper/FK_YT#korean)** · [English](https://github.com/mobsweeper/FK_YT#english)
 
 A personal YouTube viewer for Windows. Lists and a player, without keeping the YouTube webpage running.
 
@@ -17,12 +17,12 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 <!-- PUBLICATION-STATUS-BEGIN -->
 > **1.1 release files and verification**
-> **[Release files and availability: FK_YT v1.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1).** Compare downloads with [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt). The rebuilt 1.1 installer's actual UAC flow, installation time, installation, installed-app launch/playback, update and removal remain unverified. See the [files and verification scope](docs/RELEASE-1.1.md), [1.1 changes](docs/FEATURES-1.1.md), and [licensing record](docs/LICENSING-1.1.md).
+> **[Release files and availability: FK_YT v1.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1).** Compare downloads with [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt). Installation, installed-app launch/playback, installer updates and removal have been verified on Windows 10 and Windows 11, as confirmed by the maintainer on 2026-10-17. Installation time has not been measured. See the [files and verification scope](docs/RELEASE-1.1.md), [1.1 changes](docs/FEATURES-1.1.md), and [licensing record](docs/LICENSING-1.1.md).
 <!-- PUBLICATION-STATUS-END -->
 
 ## 1. Language
 
-[English](readme_EN.md) · [한국어](readme_KR.md)
+[English](https://github.com/mobsweeper/FK_YT#english) · [한국어](https://github.com/mobsweeper/FK_YT#korean)
 
 The app interface supports English, Korean, and Japanese. Changing the interface language does not change your YouTube account's region.
 
@@ -51,6 +51,23 @@ The current source limits several kinds of work:
 1.1 adds live-status handling, seeking within confirmed local live-cache ranges, and a LIVE control. Theater mode can keep comments/recommendations open, and normal/theater playback controls can be collapsed. Settings offers **manual, experimental** yt-dlp/Deno updates that take effect after restart. Shorts filtering removes explicitly marked served-ad cards; it does not promise to detect every upstream ad variant. See [1.1 features and limits](docs/FEATURES-1.1.md).
 
 The 6 GiB live value is a backward-cache budget per demuxer, **not a whole-app RAM limit or a fixed allocation**. It cannot retrieve broadcast data from before you joined. A stream recognized as live only after loading can retain its original budget if a next-video preload was already attempted; reopening it with LIVE applies the live budget.
+
+### Theoretical configured packet-cache budgets
+
+These figures add the configured forward and backward budgets; they are **not strict total-RAM ceilings**. They apply to compressed media packets, not decoded frames.
+
+| Playback/cache instance | Forward | Backward | Configured sum |
+| --- | ---: | ---: | ---: |
+| Current ordinary video (including its audio) | 32 MiB | 8 MiB | about 40 MiB |
+| One next-video preload (including its audio) | 32 MiB | 8 MiB | up to another configured 40 MiB |
+| Current ordinary video + one next-video preload | — | — | about 80 MiB combined configured budget |
+| One confirmed live stream (including its audio) | 32 MiB | 6 GiB = 6,144 MiB | 6,176 MiB = 6.03125 GiB |
+
+**Separate video/audio URLs do not normally mean two full caches in FK_YT.** Its split-stream playback path joins them into one EDL timeline; the timeline shares the packet cache, and its child demuxers do not keep another full cache. There is no fixed video-versus-audio split within that shared budget. Only genuinely independent top-level demuxers would each receive a budget, so the normal live path is not described as “6 GiB for video plus 6 GiB for audio.” See the [bundled mpv cache settings](https://github.com/mpv-player/mpv/blob/ec38361c56b2d91e417c4c3e58184535d1a1aa2e/DOCS/man/options.rst#L4279-L4324) and [timeline implementation](https://github.com/mpv-player/mpv/blob/ec38361c56b2d91e417c4c3e58184535d1a1aa2e/demux/demux_timeline.c#L614-L618).
+
+For ordinary videos, mpv can donate unused forward space to the backward cache: 8 MiB is its baseline backward setting, not a separate hard cap; the combined budget remains 40 MiB. A preload normally has little or no played-back data, so the 80 MiB row is a conservative sum of settings, not expected initial usage. Known live playback disables this donation and next-video preloading. mpv can slightly exceed its packet-budget settings for technical reasons.
+
+Thumbnail memory (96 MiB estimated image data), decoders, GPU textures, UI, subtitles, network buffers and packet-pool overhead are separate. For example, the listed packet budgets plus the thumbnail budget sum to about **176 MiB for current+next ordinary videos**, or **6.125 GiB for one live stream**; these partial sums still do not bound application/process RAM. Thumbnail disk cache (512 MiB) is separate from RAM, and playback disk caching is disabled. Buffers grow as data arrives rather than being fully preallocated.
 
 ## 3. Why this exists
 
@@ -86,7 +103,7 @@ There are security limits. Tools may need temporary plaintext cookie files, and 
 ## 5. Requirements and versions
 
 - Installer acceptance floor: **Windows 10 22H2, build 19045 or later, x64 (AMD64)**. Windows 11 x64 is also a target. x86 and ARM64 are not accepted. This does not mean every Windows 10 version is supported.
-- Local work used **Windows 10 Pro 22H2 x64, build 19045.6456**, a PC with development tools. Earlier installer installation/file/permission checks describe earlier builds. **The rebuilt 1.1 installer's actual UAC flow, installation time, installation, installed-app launch/playback, update, and removal remain unverified.** A clean Windows 11 standard-user environment has not been tested.
+- Local work used **Windows 10 Pro 22H2 x64, build 19045.6456**, a PC with development tools. **The maintainer confirmed installation, installed-app launch/playback, installer updates and removal on Windows 10 and Windows 11 on 2026-10-17.** The additional Windows 11 edition/build and clean-system/standard-user conditions were not recorded; those broader environment claims are not implied.
 - Installer acceptance is separate from vendor support. The tested Windows 10 Pro 22H2 system is not presented as an officially supported .NET 10 environment. Check editions and lifecycle status in the [.NET 10 supported OS table](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
 - Users **do not need to install .NET, Python, Deno, mpv, FFmpeg, or an SDK separately**. The required runtimes and tools are included in the app folder. Setup uses Windows' built-in 64-bit PowerShell.
 - Account connection uses Firefox or a Netscape-format cookie file you supply. Search and some playback also work without signing in.
@@ -133,14 +150,14 @@ The directory page accepts an empty app folder directly inside native 64-bit Pro
 
 ### Updates and data
 
-- **Installed version:** Close FK_YT before running a compatible newer machine installer as administrator and selecting the existing machine installation. The implementation preserves per-user profile data and user-added files; incompatible, modified, or running installations can be refused. Actual update behavior of this final revision remains unverified. The application has no automatic online updater; the separate experimental tool updater is manual and applies after restart.
+- **Installed version:** Close FK_YT before running a compatible newer machine installer as administrator and selecting the existing machine installation. The implementation preserves per-user profile data and user-added files; incompatible, modified, or running installations can be refused. Installer updates were verified on Windows 10 and Windows 11 (maintainer confirmation, 2026-10-17). This does not verify the separate experimental yt-dlp/Deno updater. The application has no automatic online updater; the separate experimental tool updater is manual and applies after restart.
 - **Portable version:** Close the app and keep the old folder as a backup. Extract the new ZIP into a separate empty folder, copy your preserved `data/` into the new `FK_YT/` folder, then launch it.
 - **Moving from portable or an earlier per-user install:** Nothing is imported automatically. Close both apps, keep the original data, and copy it as the same Windows user into an **empty** `%LOCALAPPDATA%\FK_YT\data` after installation. Do not merge SQLite databases or overwrite a data folder already in use. Existing per-user apps, shortcuts, and data are left separate.
 - Sign-in data is tied to the Windows user. Moving to a different PC or Windows account may require reconnecting the session.
 
 ### What happens when I uninstall?
 
-Use Windows **Settings → Apps → FK_YT → Uninstall**, **Uninstall FK_YT (System)** in Start Menu, or installed `Uninstall.exe`, and approve the administrator request. The machine uninstaller is designed to remove unchanged owned program files, shared shortcuts, and machine registration. **It always preserves every user's settings, sign-in information, watch history, resume positions, and downloads; there is no user-data deletion checkbox.** It does not search other user profiles. Added, modified, or locked program-folder files may remain. Actual removal of this final revision remains unverified.
+Use Windows **Settings → Apps → FK_YT → Uninstall**, **Uninstall FK_YT (System)** in Start Menu, or installed `Uninstall.exe`, and approve the administrator request. The machine uninstaller is designed to remove unchanged owned program files, shared shortcuts, and machine registration. **It always preserves every user's settings, sign-in information, watch history, resume positions, and downloads; there is no user-data deletion checkbox.** It does not search other user profiles. Added, modified, or locked program-folder files may remain. Removal was verified on Windows 10 and Windows 11 (maintainer confirmation, 2026-10-17).
 
 To delete your own installed-app data separately, close FK_YT and remove your `%LOCALAPPDATA%\FK_YT\data` only after keeping anything you need. This also removes that profile's saved sign-in and history. Downloads saved elsewhere and data in earlier portable/per-user folders are separate. If modified or added files remain in Program Files after removal, preserve them and use an empty supported folder for reinstalling.
 
@@ -218,6 +235,7 @@ See [Mozilla's profile-management guide](https://support.mozilla.org/en-US/kb/pr
 ## 8. Project layout
 
 ```text
+README.md              Bilingual repository landing README
 readme_KR.md            Korean guide
 readme_EN.md            English guide
 assets/screenshots/    README screenshots with account details blurred
