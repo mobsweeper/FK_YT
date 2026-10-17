@@ -54,7 +54,7 @@ public sealed partial class SessionService
     private async Task<JsonElement> ChannelRequestAsync(object request,CancellationToken ct,params CookieLease[] leases)
     {
         var receipt=new ProcessStopReceipt();foreach(var lease in leases)lease.AttachConsumer(receipt);
-        var response=await ProcessRunner.RunAsync(_paths.Python,["-B",Path.Combine(_paths.Root,"worker","youtube_session.py")],_paths.Root,TimeSpan.FromSeconds(60),ct,JsonSerializer.Serialize(request,JsonDefaults.Options),receipt);
+        var response=await ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","youtube_session.py")),_paths.Root,TimeSpan.FromSeconds(60),ct,JsonSerializer.Serialize(request,JsonDefaults.Options),receipt);
         if(response.ExitCode!=0)throw new IOException(UiText.T("YouTube 채널 정보를 가져오지 못했습니다. 로그인 연결을 갱신하세요.","Could not retrieve YouTube channel information. Refresh your sign-in connection.","YouTube チャンネル情報を取得できませんでした。ログイン接続を更新してください。"));
         return ParseChannelResponse(response.Output);
     }

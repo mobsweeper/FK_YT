@@ -10,7 +10,8 @@ namespace FkYouTube;
 public partial class MainWindow
 {
     private PlaybackControlsAutoHide? _controlsAutoHide;
-    private bool _theaterMode, _sidePanelHidden;
+    private bool _theaterMode, _sidePanelHidden, _theaterSidePanelHidden = true;
+    private bool _playbackControlsHidden;
 
     private void InitializePlayerViewModes()
     {
@@ -22,18 +23,33 @@ public partial class MainWindow
 
     private void HideSidePanel_Click(object sender, RoutedEventArgs e)
     {
-        _sidePanelHidden = true;
+        if (_theaterMode) _theaterSidePanelHidden = true;
+        else _sidePanelHidden = true;
         ApplyPlayerViewLayout();
         ShowSidePanelButton.Focus();
     }
 
     private void ShowSidePanel_Click(object sender, RoutedEventArgs e)
     {
-        _sidePanelHidden = false;
-        // Explicitly reopening the panel also leaves the wide theater layout.
-        _theaterMode = false;
+        if (_theaterMode) _theaterSidePanelHidden = false;
+        else _sidePanelHidden = false;
         ApplyPlayerViewLayout();
         CommentsTab.Focus();
+    }
+
+    private void HidePlaybackControls_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fullscreen || _popoutWindow is not null) return;
+        _playbackControlsHidden = true;
+        ApplyPlayerViewLayout();
+        ShowPlaybackControlsButton.Focus();
+    }
+
+    private void ShowPlaybackControls_Click(object sender, RoutedEventArgs e)
+    {
+        _playbackControlsHidden = false;
+        ApplyPlayerViewLayout();
+        PlayPauseButton.Focus();
     }
 
     private void Theater_Click(object sender, RoutedEventArgs e)
@@ -49,7 +65,15 @@ public partial class MainWindow
     {
         var playing = PlayerPanel.Visibility == Visibility.Visible;
         var wide = playing && (_fullscreen || _theaterMode);
-        var hideSide = playing && (_fullscreen || _theaterMode || _sidePanelHidden);
+        var hideSide = playing && (_fullscreen || (_theaterMode ? _theaterSidePanelHidden : _sidePanelHidden));
+        var manualControls = playing && !_fullscreen && _popoutWindow is null;
+        var hideControls = manualControls && _playbackControlsHidden;
+        // Disabling automatic hiding restores the tray content; apply the user's
+        // normal-window choice after that restoration, without changing it.
+        if (_controlsAutoHide is { } hide) hide.Enabled = playing && _fullscreen;
+        PlaybackControlsTray.Visibility = hideControls ? Visibility.Collapsed : Visibility.Visible;
+        HidePlaybackControlsButton.Visibility = manualControls ? Visibility.Visible : Visibility.Collapsed;
+        ShowPlaybackControlsButton.Visibility = hideControls ? Visibility.Visible : Visibility.Collapsed;
         SidebarColumn.Width = new(wide ? 0 : 184);
         Sidebar.Visibility = Header.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
         PlayerHeading.Visibility = _fullscreen ? Visibility.Collapsed : Visibility.Visible;
@@ -65,7 +89,6 @@ public partial class MainWindow
             : "M1,7 L1,1 7,1 M13,1 L19,1 19,7 M19,13 L19,19 13,19 M7,19 L1,19 1,13");
         TheaterButton.Background = (Brush)FindResource(_theaterMode ? "Accent" : "Panel");
         TheaterButton.Foreground = _theaterMode ? Brushes.Black : Brushes.White;
-        if (_controlsAutoHide is { } hide) hide.Enabled = playing && _fullscreen;
     }
 
     private void RefreshPlayerViewModeUiText()

@@ -389,7 +389,7 @@ public sealed partial class SessionService
         var stopReceipt=new ProcessStopReceipt();
         try
         {
-            var result=await ProcessRunner.RunAsync(_paths.Python,[Path.Combine(_paths.Root,"worker","export_session.py"),"--profile",profile,"--output",temp],_paths.Root,TimeSpan.FromSeconds(45),cancellationToken,stopReceipt:stopReceipt);
+            var result=await ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","export_session.py"),["--profile",profile,"--output",temp]),_paths.Root,TimeSpan.FromSeconds(45),cancellationToken,stopReceipt:stopReceipt);
             if(result.ExitCode!=0 || !File.Exists(temp))throw new InvalidDataException(UiText.T("Firefox 세션을 읽지 못했습니다. 선택한 프로필에서 YouTube 로그인 후 다시 연결하세요.","Could not read the Firefox session. Sign in to YouTube in the selected profile, then reconnect.","Firefox のセッションを読み取れませんでした。選択したプロファイルで YouTube にログインしてから、再接続してください。"));
             ImportFile(temp);
         }

@@ -87,11 +87,12 @@ def _bounded_description(value):
         part = "".join(character for character in part
                        if (ord(character) >= 32 or character in "\n\t")
                        and ord(character) != 127 and not 0xD800 <= ord(character) <= 0xDFFF)
-        encoded = part.encode("utf-8")[:remaining]
+        part_bytes = part.encode("utf-8")
+        encoded = part_bytes[:remaining]
         text = encoded.decode("utf-8", errors="ignore")
         result.append(text)
         remaining -= len(text.encode("utf-8"))
-        if remaining == 0 or len(encoded) < len(part.encode("utf-8")):
+        if remaining == 0 or len(encoded) < len(part_bytes):
             break
     return "".join(result)
 

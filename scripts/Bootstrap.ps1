@@ -260,15 +260,33 @@ if ($Component -ne 'Dotnet') {
     }
     $sitePackages = Join-Path $pythonRoot 'Lib/site-packages'
     $packageMarker = Join-Path $sitePackages '.fk-python-packages.json'
+    Assert-RegularBootstrapPath $sitePackages
+    Assert-RegularBootstrapPath $packageMarker
     $wheelEntries = @($lock.components.ytDlpPython, $lock.components.ytDlpEjs)
     $wheelFiles = @($wheelEntries | ForEach-Object { Get-VerifiedDownload $_ })
+    # Wheel verification may take time; recheck both paths and their ancestors
+    # before inspecting or changing the package installation.
+    Assert-RegularBootstrapPath $sitePackages
+    Assert-RegularBootstrapPath $packageMarker
     if (-not (Test-Path -LiteralPath $packageMarker)) {
+        Assert-RegularBootstrapPath $sitePackages
         if ((Test-Path -LiteralPath $sitePackages) -and (Get-ChildItem -LiteralPath $sitePackages -Force | Select-Object -First 1)) { throw 'Existing untracked Python packages are preserved.' }
+        Assert-RegularBootstrapPath $sitePackages
+        Assert-RegularBootstrapPath $packageMarker
         New-Item -ItemType Directory -Path $sitePackages -Force | Out-Null
-        foreach ($wheelFile in $wheelFiles) { [IO.Compression.ZipFile]::ExtractToDirectory($wheelFile, $sitePackages) }
+        foreach ($wheelFile in $wheelFiles) {
+            Assert-RegularBootstrapPath $sitePackages
+            Assert-RegularBootstrapPath $packageMarker
+            [IO.Compression.ZipFile]::ExtractToDirectory($wheelFile, $sitePackages)
+        }
+        Assert-RegularBootstrapPath $sitePackages
+        Assert-RegularBootstrapPath $packageMarker
+        if (Test-Path -LiteralPath $packageMarker) { throw 'Existing Python package marker is preserved; inspect .fk-python-packages.json before retrying.' }
         @{ ytDlpSha256 = $lock.components.ytDlpPython.downloadedSha256; ejsSha256 = $lock.components.ytDlpEjs.downloadedSha256 } | ConvertTo-Json | Set-Content -LiteralPath $packageMarker -Encoding utf8
     }
     else {
+        Assert-RegularBootstrapPath $sitePackages
+        Assert-RegularBootstrapPath $packageMarker
         $packageRecord = Get-Content -LiteralPath $packageMarker -Raw | ConvertFrom-Json -AsHashtable
         if ($packageRecord.ytDlpSha256 -ne $lock.components.ytDlpPython.downloadedSha256 -or $packageRecord.ejsSha256 -ne $lock.components.ytDlpEjs.downloadedSha256) { throw 'Existing Python packages differ from the lock and are preserved.' }
     }

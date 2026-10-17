@@ -41,7 +41,7 @@ public sealed class OwnedProcess : IDisposable
         if (!File.Exists(exe)) throw new FileNotFoundException("Runtime executable is missing.", exe);
         if (workingDirectory is not null) workingDirectory = Path.GetFullPath(workingDirectory);
         nint job = 0, stdinRead = 0, stdinWrite = 0, stdoutRead = 0, stdoutWrite = 0, stderrRead = 0, stderrWrite = 0;
-        nint attributeList = 0, handleList = 0;
+        nint attributeList = 0, handleList = 0, childEnvironment = 0;
         var attributesInitialized = false;
         var pi = new Native.ProcessInformation();
         Process? process = null;
@@ -88,9 +88,10 @@ public sealed class OwnedProcess : IDisposable
                 if (arg is null || arg.Contains('\0')) throw new ArgumentException("Arguments must be non-null and contain no NUL characters.", nameof(args));
                 commandLine.Append(' ').Append(QuoteArgument(arg));
             }
+            childEnvironment = CreateChildEnvironment();
             // lpApplicationName is explicit; no shell, PATH lookup, or command expansion occurs.
             Check(Native.CreateProcessW(exe, commandLine, 0, 0, true,
-                0x08000000 | 0x00000004 | 0x00080000, 0, workingDirectory, ref startup, out pi));
+                0x08000000 | 0x00000004 | 0x00080000 | 0x00000400, childEnvironment, workingDirectory, ref startup, out pi));
             Check(Native.AssignProcessToJobObject(job, pi.Process));
             process = Process.GetProcessById(checked((int)pi.ProcessId));
             // Retain the Process handle while the original creation handle is still open.
@@ -116,10 +117,41 @@ public sealed class OwnedProcess : IDisposable
         {
             if (attributeList != 0) { if (attributesInitialized) Native.DeleteProcThreadAttributeList(attributeList); Marshal.FreeHGlobal(attributeList); }
             if (handleList != 0) Marshal.FreeHGlobal(handleList);
+            if (childEnvironment != 0) Marshal.FreeHGlobal(childEnvironment);
             Close(ref pi.Thread); Close(ref pi.Process);
             Close(ref stdinRead); Close(ref stdinWrite); Close(ref stdoutRead); Close(ref stdoutWrite); Close(ref stderrRead); Close(ref stderrWrite);
             Close(ref job);
         }
+    }
+
+    private static nint CreateChildEnvironment()
+    {
+        // Preserve the native snapshot, including Windows' hidden =C: entries.
+        // Rebuilding from managed Environment would discard those drive states.
+        var inherited = Native.GetEnvironmentStringsW();
+        Check(inherited != 0);
+        try
+        {
+            var entries = new List<string>();
+            for (var current = inherited; Marshal.ReadInt16(current) != 0;)
+            {
+                var entry = Marshal.PtrToStringUni(current)!;
+                entries.Add(entry);
+                current += checked((entry.Length + 1) * sizeof(char));
+            }
+            return Marshal.StringToHGlobalUni(BuildChildEnvironmentBlock(entries));
+        }
+        finally { Native.FreeEnvironmentStringsW(inherited); }
+    }
+
+    private static string BuildChildEnvironmentBlock(IEnumerable<string> entries)
+    {
+        var block = new StringBuilder();
+        foreach (var entry in entries)
+            if (!entry.StartsWith("SSLKEYLOGFILE=", StringComparison.OrdinalIgnoreCase))
+                block.Append(entry).Append('\0');
+        if (block.Length == 0) block.Append('\0');
+        return block.Append('\0').ToString();
     }
 
     public Task WaitForExitAsync(CancellationToken cancellationToken = default) => Process.WaitForExitAsync(cancellationToken);
@@ -272,6 +304,8 @@ public sealed class OwnedProcess : IDisposable
         [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool UpdateProcThreadAttribute(nint attributes, uint flags, nuint attribute, nint value, nuint size, nint previous, nint returnedSize);
         [DllImport("kernel32.dll")] internal static extern void DeleteProcThreadAttributeList(nint attributes);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CreateProcessW(string applicationName, StringBuilder commandLine, nint processAttributes, nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint flags, nint environment, string? currentDirectory, ref StartupInfoEx startupInfo, out ProcessInformation processInformation);
+        [DllImport("kernel32.dll", SetLastError = true)] internal static extern nint GetEnvironmentStringsW();
+        [DllImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool FreeEnvironmentStringsW(nint environment);
         [DllImport("kernel32.dll", SetLastError = true)] internal static extern uint ResumeThread(nint thread);
         [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool TerminateProcess(nint process, uint exitCode);
         [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CloseHandle(nint handle);

@@ -141,7 +141,7 @@ public sealed class YouTubeService
     {
         var receipt=new ProcessStopReceipt();lease?.AttachConsumer(receipt);
         var command=YouTubeAccountOptions.CreateCommand(_paths,args,channel);
-        if(subtitleCatalog)return ProcessRunner.RunAsync(_paths.Python,new[]{"-B",Path.Combine(_paths.Root,"worker","selected_ytdlp.py")}.Concat(args).ToArray(),_paths.Root,timeout,ct,
+        if(subtitleCatalog)return ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","selected_ytdlp.py"),args),_paths.Root,timeout,ct,
             JsonSerializer.Serialize(new{accountContext=channel,operation="subtitle_catalog"},JsonDefaults.Options),receipt);
         return ProcessRunner.RunAsync(command.Executable,command.Arguments,_paths.Root,timeout,ct,command.StandardInput,receipt);
     }
@@ -322,7 +322,7 @@ public sealed class YouTubeService
         var canRate=!incognito && _session.IsConnected && accountContext!=null && lease.Path!=null;
         var request=JsonSerializer.Serialize(new{url=canonical,cookiePath=lease.Path,accountContext,maxItems=30},JsonDefaults.Options);
         var receipt=new ProcessStopReceipt();lease.AttachConsumer(receipt);
-        var result=await ProcessRunner.RunAsync(_paths.Python,["-B",Path.Combine(_paths.Root,"worker","related_feed.py")],_paths.Root,TimeSpan.FromSeconds(50),ct,request,receipt);
+        var result=await ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","related_feed.py")),_paths.Root,TimeSpan.FromSeconds(50),ct,request,receipt);
         if(result.ExitCode!=0)throw new IOException(UiText.T("관련 추천을 불러오지 못했습니다. 다시 불러오기를 눌러 주세요.","Could not load related recommendations. Select Reload.","関連動画のおすすめを読み込めませんでした。「再読み込み」を押してください。"));
         try
         {
@@ -379,7 +379,7 @@ public sealed class YouTubeService
         try
         {
             var receipt=new ProcessStopReceipt();lease.AttachConsumer(receipt);
-            var result=await ProcessRunner.RunAsync(_paths.Python,["-B",Path.Combine(_paths.Root,"worker","related_feed.py")],_paths.Root,TimeSpan.FromSeconds(50),ct,request,receipt);
+            var result=await ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","related_feed.py")),_paths.Root,TimeSpan.FromSeconds(50),ct,request,receipt);
             if(result.ExitCode!=0)throw new IOException(UiText.T("내 평가를 확인하지 못했습니다. 로그인 연결을 갱신하고 다시 시도해 주세요.","Could not check your rating. Refresh your sign-in connection and try again.","自分の評価を確認できませんでした。ログイン接続を更新してから、もう一度お試しください。"));
             using var doc=JsonDocument.Parse(result.Output);
             var parsed=ParseRating(doc.RootElement,videoId,rating!=null);
@@ -504,6 +504,187 @@ public sealed class YouTubeService
             _dislikeCache[videoId]=new(stats,now+TimeSpan.FromMinutes(5));
         }
     }
+    public async Task<PlaybackStatus> GetPlaybackStatusAsync(string url,CancellationToken ct,bool incognito=false)
+    {
+        ct.ThrowIfCancellationRequested();
+        if(!TryVideoUrl(url,out var videoId,out var canonical))throw InvalidMetadata();
+        using var lease=incognito?new CookieLease(null):_session.Acquire();
+        var channel=incognito?null:_session.SelectedChannel;
+        var args=BaseArguments(lease.Path,channel);
+        // Upcoming broadcasts have no formats. Metadata remains useful without
+        // probing streams, waiting for a broadcast, or changing watch history.
+        args.AddRange(["--no-write-comments","--simulate","--no-check-formats","--ignore-no-formats-error","--dump-single-json",canonical]);
+        var result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(45),ct,lease:lease);
+        if(result.ExitCode!=0)throw new YouTubeAccessException(ProcessRunner.ClassifyError(result.Error),lease.Path is not null);
+        try{using var doc=JsonDocument.Parse(result.Output);return ParsePlaybackStatus(doc.RootElement,videoId);}
+        catch(JsonException){throw InvalidMetadata();}
+    }
+
+    public static bool IsKnownLiveStatus(string? status)=>status is "not_live" or "is_live" or "is_upcoming" or "was_live" or "post_live";
+
+    public static PlaybackStatus ParsePlaybackStatus(JsonElement video,string? expectedVideoId=null)
+    {
+        RequireObject(video);
+        if(!video.TryGetProperty("id",out var idValue) || idValue.ValueKind!=JsonValueKind.String ||
+            idValue.GetString() is not {} videoId || !Regex.IsMatch(videoId,"^[A-Za-z0-9_-]{11}\\z") ||
+            expectedVideoId is not null && videoId!=expectedVideoId)throw InvalidMetadata();
+        string status="unknown";
+        if(video.TryGetProperty("live_status",out var supplied) && supplied.ValueKind!=JsonValueKind.Null)
+        {
+            if(supplied.ValueKind!=JsonValueKind.String || !IsKnownLiveStatus(supplied.GetString()))throw InvalidMetadata();
+            status=supplied.GetString()!;
+        }
+        bool? Flag(string name)
+        {
+            if(!video.TryGetProperty(name,out var flag) || flag.ValueKind==JsonValueKind.Null)return null;
+            if(flag.ValueKind is not (JsonValueKind.True or JsonValueKind.False))throw InvalidMetadata();
+            return flag.GetBoolean();
+        }
+        var live=Flag("is_live");var wasLive=Flag("was_live");var upcoming=Flag("is_upcoming");
+        if(status=="unknown")status=live==true?"is_live":upcoming==true?"is_upcoming":wasLive==true?"was_live":live==false && wasLive==false?"not_live":"unknown";
+        if(live==true && status!="is_live" || live==false && status=="is_live" || upcoming==true && status!="is_upcoming")throw InvalidMetadata();
+        DateTimeOffset? scheduled=null;
+        if(video.TryGetProperty("release_timestamp",out var release) && release.ValueKind==JsonValueKind.Number && release.TryGetInt64(out var seconds))
+            try{scheduled=DateTimeOffset.FromUnixTimeSeconds(seconds);}catch(ArgumentOutOfRangeException){throw InvalidMetadata();}
+        return new(videoId,status,scheduled);
+    }
+
+    public async Task<LiveHlsMedia> ResolveLiveAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null)
+    {
+        // Obtain the catalog even when no HLS rendition is available, so an
+        // unsupported transport gets an explicit message rather than an opaque
+        // yt-dlp "requested format unavailable" extraction failure.
+        var resolution=await ResolvePlaybackAsync(url,maxHeight,ct,incognito,subtitleLanguage);
+        return resolution.Live??throw UnsupportedLiveMedia();
+    }
+
+    public async Task<PlaybackResolution> ResolvePlaybackAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null)
+    {
+        ct.ThrowIfCancellationRequested();
+        if(!TryVideoUrl(url,out var videoId,out var canonical))throw InvalidMetadata();
+        using var lease=incognito?new CookieLease(null):_session.Acquire();
+        var channel=incognito?null:_session.SelectedChannel;
+        var args=BaseArguments(lease.Path,channel);
+        // Retain the existing VOD selection. A live rendition is selected from
+        // this same verified response's complete, yt-dlp ordered format catalog.
+        args.AddRange(["--no-write-comments","--simulate","--no-live-from-start","--no-check-formats","--ignore-no-formats-error",
+            "--write-subs","--write-auto-subs","--sub-langs",PreferredSubtitlePattern(subtitleLanguage),"--sub-format","vtt/best",
+            "--format",VideoFormat(maxHeight),"--dump-single-json",canonical]);
+        var result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(70),ct,lease:lease);
+        if(result.ExitCode!=0)throw new YouTubeAccessException(ProcessRunner.ClassifyError(result.Error),lease.Path is not null);
+        try
+        {
+            using var doc=JsonDocument.Parse(result.Output);
+            ParsePlaybackStatus(doc.RootElement,videoId);
+            return ParsePlaybackResolution(doc.RootElement,maxHeight);
+        }
+        catch(JsonException){throw InvalidMetadata();}
+    }
+
+    public static PlaybackResolution ParsePlaybackResolution(JsonElement video,int maxHeight=0)
+    {
+        var status=ParsePlaybackStatus(video);
+        if(status.IsUpcoming || status.LiveStatus=="post_live")return new(status,null,null);
+        if(!status.IsLive)return new(status,ParsePreparedVideo(video),null);
+        var height=NormalizeMaxHeight(maxHeight);
+        if(video.TryGetProperty("formats",out var formats) && formats.ValueKind==JsonValueKind.Array)
+        {
+            foreach(var format in formats.EnumerateArray().Reverse())
+            {
+                if(!IsPreparedHls(format) || !HasMuxedCodecs(format) || !format.TryGetProperty("height",out var pixels) ||
+                    pixels.ValueKind!=JsonValueKind.Number || !pixels.TryGetInt32(out var h) || h is <=0 or >16384 || height>0 && h>height)continue;
+                // Copy only this rendition and shared caption/header metadata.
+                // A DASH selection's fragments/protocol must not leak into HLS.
+                var candidate=new Dictionary<string,object?>
+                {
+                    ["id"]=status.VideoId,["live_status"]="is_live",["is_live"]=true,
+                    ["requested_formats"]=new[]{format},["formats"]=formats
+                };
+                foreach(var field in new[]{"http_headers","requested_subtitles","has_drm"})
+                    if(video.TryGetProperty(field,out var value))candidate[field]=value;
+                try{return new(status,null,ParseLiveHlsMedia(JsonSerializer.SerializeToElement(candidate)));}
+                catch(InvalidDataException){/* Try the next complete supported HLS rendition. */}
+            }
+            throw UnsupportedLiveMedia();
+        }
+        // Some extractors provide only the selected rendition.
+        var single=ParseLiveHlsMedia(video);
+        var selected=video.TryGetProperty("requested_formats",out var chosen)?chosen[0]:video;
+        if(height>0 && selected.GetProperty("height").GetInt32()>height)throw UnsupportedLiveMedia();
+        return new(status,null,single);
+    }
+
+    public static LiveHlsMedia ParseLiveHlsMedia(JsonElement video)
+    {
+        var status=ParsePlaybackStatus(video);
+        if(!status.IsLive)throw UnsupportedLiveMedia();
+        JsonElement format=video;
+        if(video.TryGetProperty("requested_formats",out var requested))
+        {
+            if(requested.ValueKind!=JsonValueKind.Array || requested.GetArrayLength()!=1)throw UnsupportedLiveMedia();
+            format=requested[0];
+        }
+        if(!IsPreparedHls(format) || !TryPreparedHlsUrl(format,"url","hls_playlist",out var source) ||
+            !HasMuxedCodecs(format) || !format.TryGetProperty("height",out var selectedHeight) || selectedHeight.ValueKind!=JsonValueKind.Number ||
+            !selectedHeight.TryGetInt32(out var selectedPixels) || selectedPixels is <=0 or >16384)throw UnsupportedLiveMedia();
+        if(video.TryGetProperty("protocol",out var topProtocol) && topProtocol.ValueKind!=JsonValueKind.Null && !IsPreparedHls(video))throw UnsupportedLiveMedia();
+        var headers=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+        foreach(var item in new[]{video,format})
+        {
+            RequireObject(item);
+            if(item.TryGetProperty("has_drm",out var drm) && drm.ValueKind is not (JsonValueKind.False or JsonValueKind.Null))throw UnsupportedLiveMedia();
+            if(HasUnsupportedLiveTransport(item))throw UnsupportedLiveMedia();
+            if(item.TryGetProperty("http_headers",out var supplied) && supplied.ValueKind!=JsonValueKind.Null)
+            {
+                if(supplied.ValueKind!=JsonValueKind.Object)throw InvalidMetadata();
+                var count=0;
+                foreach(var header in supplied.EnumerateObject())
+                {
+                    if(++count>16 || !IsBenignLiveHeader(header.Name) || header.Value.ValueKind!=JsonValueKind.String)throw UnsupportedLiveMedia();
+                    var value=header.Value.GetString()!;
+                    if(value.Length>8192 || value.Any(char.IsControl) || headers.TryGetValue(header.Name,out var previous) && previous!=value)throw InvalidMetadata();
+                    headers[header.Name]=value;
+                }
+            }
+        }
+        var resolutions=new SortedSet<int>();
+        void AddResolution(JsonElement item)
+        {
+            if(IsPreparedHls(item) && HasMuxedCodecs(item) && !HasUnsupportedLiveTransport(item) && TryPreparedHlsUrl(item,"url","hls_playlist",out _) &&
+                item.TryGetProperty("height",out var h) && h.ValueKind==JsonValueKind.Number && h.TryGetInt32(out var pixels) && pixels is >0 and <=16384)
+                resolutions.Add(pixels);
+        }
+        AddResolution(format);
+        if(video.TryGetProperty("formats",out var formats) && formats.ValueKind==JsonValueKind.Array)
+            foreach(var item in formats.EnumerateArray())if(item.ValueKind==JsonValueKind.Object &&
+                (!item.TryGetProperty("has_drm",out var drm) || drm.ValueKind is JsonValueKind.False or JsonValueKind.Null))AddResolution(item);
+        var captions=new List<PreparedCaption>();
+        if(video.TryGetProperty("requested_subtitles",out var subs) && subs.ValueKind==JsonValueKind.Object)
+            foreach(var item in subs.EnumerateObject().Take(8))
+                if(IsValidSubtitleLanguage(item.Name) && item.Value.ValueKind==JsonValueKind.Object && item.Value.TryGetProperty("url",out var caption) &&
+                    caption.ValueKind==JsonValueKind.String && TrySubtitleCatalogUrl(caption.GetString(),out var canonical))captions.Add(new(item.Name,canonical));
+        return new(status.VideoId,source.AbsoluteUri,headers,resolutions.ToArray(),captions);
+    }
+
+    private static bool HasMuxedCodecs(JsonElement format)
+    {
+        if(format.ValueKind!=JsonValueKind.Object)return false;
+        foreach(var name in new[]{"vcodec","acodec"})
+            if(!format.TryGetProperty(name,out var codec) || codec.ValueKind!=JsonValueKind.String || codec.GetString() is not {} text || text.Length is <1 or >128 ||
+                text is "none" or "images" || text.Any(character=>!char.IsAsciiLetterOrDigit(character) && character is not ('.' or '-' or '_')))return false;
+        return true;
+    }
+    private static bool HasUnsupportedLiveTransport(JsonElement item)
+    {
+        foreach(var field in new[]{"fragments","fragment_base_url","hls_aes","extra_param_to_segment_url","extra_param_to_key_url","cookies"})
+            if(item.TryGetProperty(field,out var value) && value.ValueKind!=JsonValueKind.Null)return true;
+        return item.TryGetProperty("downloader_options",out var options) && options.ValueKind!=JsonValueKind.Null &&
+            (options.ValueKind!=JsonValueKind.Object || options.EnumerateObject().Any());
+    }
+    internal static bool IsBenignLiveHeader(string name)=>name.Equals("User-Agent",StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Accept",StringComparison.OrdinalIgnoreCase) || name.Equals("Accept-Language",StringComparison.OrdinalIgnoreCase) || name.Equals("Sec-Fetch-Mode",StringComparison.OrdinalIgnoreCase);
+    private static InvalidDataException UnsupportedLiveMedia()=>new(UiText.T("이 라이브의 전송 형식은 아직 지원하지 않습니다. 단일 HLS 영상·음성 스트림이 필요합니다.","This live transport is not supported yet. A single muxed HLS stream is required.","このライブ配信形式にはまだ対応していません。映像と音声を含む単一 HLS ストリームが必要です。"));
+
     public async Task<PreparedVideo> ResolveNextAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null)
     {
         ct.ThrowIfCancellationRequested();
@@ -647,6 +828,14 @@ public sealed class YouTubeService
     }
 }
 public sealed record PreparedCaption(string Language,string Url);
+public sealed record PlaybackStatus(string VideoId,string LiveStatus,DateTimeOffset? ScheduledStart=null)
+{
+    public bool IsLive=>LiveStatus=="is_live";
+    public bool IsUpcoming=>LiveStatus=="is_upcoming";
+    public bool HasEnded=>LiveStatus is "post_live" or "was_live";
+}
+public sealed record PlaybackResolution(PlaybackStatus Status,PreparedVideo? Vod,LiveHlsMedia? Live);
+public sealed record LiveHlsMedia(string VideoId,string MediaUrl,IReadOnlyDictionary<string,string> Headers,IReadOnlyList<int> Resolutions,IReadOnlyList<PreparedCaption> Captions);
 public sealed record PreparedVideo(string MediaUrl,IReadOnlyDictionary<string,string> Headers,IReadOnlyList<int> Resolutions,IReadOnlyList<PreparedCaption> Captions,int? HttpChunkSize=null)
 {
     // App policy: accept the pinned extractor's 10 MiB limit, bounded to 64 MiB.

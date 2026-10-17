@@ -9,6 +9,7 @@ public partial class MainWindow
         RefreshMainWindowTextState();
         AccountLabel.Text = GetAccountLabelText();
         UpdateToolState();
+        RefreshToolUpdateUiText();
         RefreshBrowseUiText();
         RefreshFeatureUiText();
         RefreshQueueUiText();
@@ -18,6 +19,7 @@ public partial class MainWindow
         if (!string.IsNullOrEmpty(ItemCount.Text))
             ItemCount.Text = UiText.F("{0:N0}개", "{0:N0} items", "{0:N0} 件", _items.Count);
         UpdatePauseControls();
+        RefreshLiveControls(_snapshot);
         if (_snapshot is {} snapshot)
         {
             DecoderLabel.Text = snapshot.HardwareDecoder is null or "unavailable"

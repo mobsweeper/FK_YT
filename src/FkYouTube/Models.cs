@@ -12,6 +12,7 @@ public sealed record VideoItem
     public double? Duration { get; init; }
     public long? ViewCount { get; init; }
     public string Kind { get; init; } = "video";
+    public string LiveStatus { get; init; } = "unknown";
     public bool MembersOnly { get; init; }
     public string? ChannelId { get; init; }
     public string? ChannelUrl { get; init; }

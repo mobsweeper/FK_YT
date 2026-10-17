@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('Debug', 'Release')][string]$Configuration = 'Release', [switch]$NoRestore, [switch]$Test)
+param([ValidateSet('Debug', 'Release')][string]$Configuration = 'Release', [switch]$NoRestore)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 function Assert-RegularBuildPath([string]$Path) {
@@ -40,16 +40,7 @@ if (-not (Test-Path -LiteralPath $nugetLock -PathType Leaf)) { throw 'Missing re
 $buildArgs = @('build', $project, '-c', $Configuration, '--nologo', '-p:RestoreLockedMode=true', '-p:RuntimeIdentifiers=win-x64')
 if ($NoRestore) {
     # This skips graph/lock validation; use only after a verified locked restore.
-    # With -Test, the test project's assets must also have been restored already.
     $buildArgs += '--no-restore'
 }
 & $dotnet @buildArgs
 if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE." }
-if ($Test) {
-    $testProject = Join-Path $projectRoot 'tests/FkYouTube.Tests/FkYouTube.Tests.csproj'
-    if (-not (Test-Path -LiteralPath $testProject)) { throw 'Tests project is absent.' }
-    $testArgs = @('run', '--project', $testProject, '-c', $Configuration, '-p:RestoreLockedMode=true', '-p:RuntimeIdentifiers=win-x64')
-    if ($NoRestore) { $testArgs += '--no-restore' }
-    & $dotnet @testArgs
-    if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE." }
-}

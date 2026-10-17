@@ -1,0 +1,135 @@
+FK_YT 1.1 - matching source access and historical filename mapping
+Prepared 2026-10-17
+
+Release location:
+https://github.com/mobsweeper/FK_YT/releases/tag/v1.1
+
+Check the release page for distributed files and current access. Including
+this document does not automatically publish files or verify recipient access.
+This network-distribution arrangement supplies matching source collections
+alongside the binaries with equivalent copying access and no extra source-access
+fee. Keep that access available while offering the binaries under this method.
+See RELEASE-1.1.md for the distribution and verification scope.
+
+FK_YT-owned code and documentation use MIT. Third-party components retain
+their original licenses, copyrights and NOTICE files. Read license.md,
+LICENSING-1.1.md and LICENSES-SUPPLEMENT-1.1.txt with this mapping.
+
+Final v1.1 files
+===============
+Runnable downloads:
+  FK_YT-1.1-portable.zip
+  FK_YT-1.1-Setup-x64.exe
+
+Matching FK_YT application source and public build controls:
+  FK_YT-1.1-source.zip
+  https://github.com/mobsweeper/FK_YT/releases/download/v1.1/FK_YT-1.1-source.zip
+
+Matching installer-owned source, build controls and original NSIS notices:
+  FK_YT-1.1-installer-source.zip
+  https://github.com/mobsweeper/FK_YT/releases/download/v1.1/FK_YT-1.1-installer-source.zip
+
+Final archive and executable hashes are listed in SHA256SUMS.txt beside
+the release files:
+  https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt
+
+The application/installer source archives refer to that final checksum file
+instead of embedding their own archive hashes. A new public-source repack has
+its own hash. Removing FK_YT's internal records and test scripts does not remove
+production source, required build controls or any external upstream material.
+
+Unchanged external corresponding-source collections
+==================================================
+These are FK_YT-prepared collections, not official upstream ZIP filenames.
+All three below must accompany the binaries. Their hashes are unchanged from
+the retained publication source collections; no upstream source archive,
+upstream test/workflow, patch, interface file or original notice is removed or
+edited for 1.1.
+
+FK_YT_yt-dlp.zip
+Bytes: 165234763
+SHA-256: e22f4df8dcb40205dc9b2b2ade373a6d6f3d3e5adab786b36f628999504c8ab2
+https://github.com/mobsweeper/FK_YT/releases/download/v1.1/FK_YT_yt-dlp.zip
+Target executable: yt-dlp.exe 2026.08.19
+Target executable SHA-256: 66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a
+Legacy name in preserved payload notices:
+  yt-dlp-2026.08.19-corresponding-source.zip
+Legacy SHA-256:
+  79b63a0324dbc4202ef1cf90cd46372f29d414d0c335669eb7a77e7398b380f1
+Earlier publication repack SHA-256:
+  29271824515a7ca05ac74d236b7a4d23e6cced9ba76f65974f7993f105791c47
+
+FK_YT_mpv-FFmpeg-part1.zip
+Bytes: 1608074669
+SHA-256: b53ab130c5f1102874f7edbdfc49b0baa30fa1eb1251ad476e9e3624512c4129
+https://github.com/mobsweeper/FK_YT/releases/download/v1.1/FK_YT_mpv-FFmpeg-part1.zip
+Legacy name in preserved payload notices:
+  FK_YT-20261016-media-corresponding-source-1.zip
+Legacy SHA-256:
+  d5efb6f1a41da8bcc9c2c8b7248d8c5a0aaf62ab2fb016468d52015fab882560
+Earlier publication repack SHA-256:
+  b37fad3902adbd1e12fdd78e390af108c50ebb170207af07c2a7edcbfc493928
+
+FK_YT_mpv-FFmpeg-part2.zip
+Bytes: 118680866
+SHA-256: 5f499d855e975df0f8c72e0e2a3d3949b13f8f121a9c241273ca2b1c0337cc53
+https://github.com/mobsweeper/FK_YT/releases/download/v1.1/FK_YT_mpv-FFmpeg-part2.zip
+Target media: mpv 0.41.0-dev-gec38361c56-fkyt, FFmpeg/ffprobe 9.0.2 and
+the linked media-library cohort indexed inside the archives.
+mpv.exe SHA-256: 7aa68a822a32317e3ef6a97f99a479096c73fc5651326c8ada8986de0d85bb0d
+Legacy name in preserved payload notices:
+  FK_YT-20261016-media-corresponding-source-2.zip
+Legacy SHA-256:
+  8cd57af6917ff2582a0eae3a3fa778ab790e0580f176afe32f4350146709d478
+Earlier publication repack SHA-256:
+  7c45ffe820565ae35c4733b4093d8e0b56341e74fe09f3c56ee61faaba66d8fc
+
+Both media ZIPs are INDEPENDENT archives, not split volumes. Extract part1 and
+then part2 into the same new folder. Their shared top-level source README/index
+records are identical in this publication repack. Both ZIPs are required.
+
+The media source includes exact source archives, patches, package recipes,
+interface sources, pinned dependency archives, build controls and indexes.
+The yt-dlp source includes the upstream build workflows, installation scripts,
+embedded-interpreter and dependency source materials. Upstream tests and build
+recipes inside these external archives are preserved even though FK_YT-owned
+test scripts and internal work records are excluded from the app source ZIP.
+
+Other source and notices
+========================
+Deno's applicable MPL package sources are already included in the runnable
+payload at notices/deno/third-party/sources/mpl/. The accompanying
+MPL-SOURCE-AVAILABILITY.txt and component indexes identify them. Preserve these
+sources and original notices when redistributing the payload.
+
+The installer uses NSIS 3.13 zlib compression. Its source collection retains
+the original NSIS, MUI2 and used-plugin notices, including component exceptions.
+The exact toolchain archives and hashes are identified by its build pins.
+
+Historical records and verification limits
+=========================================
+Original 1.0 and preview notices embedded in retained payloads identify earlier
+application names, private/draft status and earlier source archive hashes.
+They are preserved as historical records. Use this document and the final
+v1.1 SHA256SUMS.txt for the current names and source mapping; no historical
+notice is rewritten to imply that an older binary was rebuilt.
+
+The external publication repack repaired distributor metadata/origin fields and
+added recovered legal notices. Original retained source archives, patches and
+legal texts were preserved. Four macOS-only crate blobs with unresolved legal
+notice evidence were excluded before this unchanged Windows source collection;
+their cross-platform lockfile entries remain. It is not a complete offline
+all-target Cargo source set. No additional source exclusions occur for 1.1.
+
+The supplier's exact historical final librsvg Cargo.lock was not captured.
+The upstream lock and a labelled reconstruction are supplied, with original
+recipes and source records. Unrecoverable historical origin URLs are marked
+unknown rather than invented. A full external-cohort bit-identical rebuild and
+independent supplier-package GPG verification are not established. These are
+verification limits, not a claim that such checks passed. See the archives'
+PUBLICATION-CHANGES.txt, build controls and source indexes for details.
+
+Source access is supplied through matching files rather than an unfulfilled
+promise to provide source later. Modified redistributions must preserve the
+applicable notices and supply source corresponding to their own changed
+binaries. A link to an upstream latest branch does not identify that source.

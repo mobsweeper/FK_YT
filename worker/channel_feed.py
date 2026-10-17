@@ -14,6 +14,7 @@ import secrets
 import urllib.parse
 
 from home_feed import _chip_renderers, _flat_card, _text, _token
+from channel_metadata import thumbnail_candidate
 from youtube_session import account_api_headers, configure_ytcfg, validate_account_context
 
 
@@ -269,11 +270,14 @@ class ChannelFeed:
         if not isinstance(avatars, list):
             avatars = _at(response, "header", "pageHeaderRenderer", "content", "pageHeaderViewModel",
                           "image", "decoratedAvatarViewModel", "avatar", "avatarViewModel", "image", "sources")
-        urls = [value.get("url") for value in (avatars or [])[:64] if isinstance(value, Mapping)
-                and isinstance(value.get("url"), str) and value["url"].startswith("https://")]
+        candidates = [candidate for value in (avatars or [])[:64] if isinstance(value, Mapping)
+                      and (candidate := thumbnail_candidate(value.get("url"))) is not None]
+        urls = [candidate[0] for candidate in candidates if candidate[1]]
+        if not urls:
+            urls = [candidate[0] for candidate in candidates]
         self.channel = {"id": channel_id, "title": title[:512],
                         "url": "https://www.youtube.com/channel/" + channel_id + "/videos",
-                        "thumbnail": urls[-1][:4096] if urls else ""}
+                        "thumbnail": urls[-1] if urls else ""}
         if isinstance(item.get("description"), str) and item["description"]:
             self.channel["description"] = item["description"][:8192]
         self.targets = {"browse-feed" + channel_id, "browse-feed" + channel_id + "videos"}

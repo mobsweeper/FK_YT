@@ -18,6 +18,11 @@ VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 MAX_SEQUENCE_PAGES = 128
 MAX_PAGE_ENTRIES = 128
 MAX_EMPTY_PAGES = 3
+# A deliberately small fixture contract: explicit ad cards only. Generic
+# player ad inventories, paid-promotion disclosures and text are not evidence
+# that the feed card itself is a served ad. Live response schemas may differ.
+SERVED_AD_RENDERERS = ("adSlotRenderer", "adPlacementRenderer", "reelAdRenderer",
+                       "shortsAdRenderer", "instreamVideoAdRenderer")
 
 
 class ShortsFeedError(Exception):
@@ -44,14 +49,50 @@ def _continuation(response):
     return _string(_mapping(_mapping(response.get("continuationEndpoint")).get("continuationCommand")).get("token"))
 
 
-def _flat_entry(command, *, item_response=None):
+def _served_ad(scope):
+    scope = _mapping(scope)
+    return scope.get("isAd") is True or any(
+        isinstance(scope.get(key), Mapping) and bool(scope[key])
+        for key in SERVED_AD_RENDERERS)
+
+
+def _current_reel_response(response, video_id, *, matched_prefetch=False):
+    response = _mapping(response)
+    if "videoId" in response and response.get("videoId") != video_id:
+        return {}
+    replacement_id = _mapping(_mapping(response.get("replacementEndpoint")).get("reelWatchEndpoint")).get("videoId")
+    if replacement_id:
+        return response if replacement_id == video_id else {}
+    # A prefetched reel response without its own ID is usable only when its
+    # associated playerResponse videoDetails identifies this exact card.
+    return response if matched_prefetch else {}
+
+
+def _flat_entry(command, *, item_response=None, card=None):
     endpoint = _mapping(_mapping(command).get("reelWatchEndpoint"))
     video_id = _string(endpoint.get("videoId"))
     if not VIDEO_ID.fullmatch(video_id):
         return None
     prefetch = _mapping(endpoint.get("unserializedPrefetchData"))
-    details = _mapping(_mapping(prefetch.get("playerResponse")).get("videoDetails"))
+    player_response = _mapping(prefetch.get("playerResponse"))
+    details = _mapping(player_response.get("videoDetails"))
     matched_prefetch = details.get("videoId") == video_id
+    renderer = (_current_reel_response(prefetch.get("reelItemWatchResponse"), video_id,
+                                       matched_prefetch=True) if matched_prefetch else {})
+    current_response = _current_reel_response(item_response, video_id)
+    card = _mapping(card)
+    card_id = _mapping(_mapping(card.get("command")).get("reelWatchEndpoint")).get("videoId")
+    # Do not recursively scan: neighboring cards, menus and engagement panels
+    # can describe other content. Only these current-card locations qualify.
+    scopes = [_mapping(command), endpoint, current_response]
+    if card_id == video_id:
+        scopes.append(card)
+    if matched_prefetch:
+        scopes.extend((prefetch, player_response, renderer))
+    for response in (renderer, current_response):
+        scopes.append(_mapping(_mapping(response.get("overlay")).get("reelPlayerOverlayRenderer")))
+    if any(_served_ad(scope) for scope in scopes):
+        return None
     # Metadata from a prefetched neighboring video must not label this card.
     if details.get("videoId") != video_id:
         details = {}
@@ -76,11 +117,7 @@ def _flat_entry(command, *, item_response=None):
         result["duration"] = duration
     # Raw menus are passed to the worker's strict feedback classifier. They are
     # inert; the worker retains tokens internally and exposes opaque handles.
-    renderer = _mapping(prefetch.get("reelItemWatchResponse")) if matched_prefetch else {}
-    if not renderer and isinstance(item_response, Mapping):
-        replacement_id = _mapping(_mapping(item_response.get("replacementEndpoint")).get("reelWatchEndpoint")).get("videoId")
-        if replacement_id == video_id:
-            renderer = item_response
+    renderer = renderer or current_response
     menu = _mapping(_mapping(renderer.get("overlay")).get("reelPlayerOverlayRenderer")).get("menu")
     if isinstance(menu, Mapping) and menu:
         result["_recommendation_renderer"] = {"menu": menu}
@@ -136,8 +173,8 @@ class ShortsFeed:
             raise ShortsFeedError("unavailable")
         return response
 
-    def _enqueue(self, command, item_response=None):
-        entry = _flat_entry(command, item_response=item_response)
+    def _enqueue(self, command, item_response=None, *, card=None):
+        entry = _flat_entry(command, item_response=item_response, card=card)
         if entry is None or entry["id"] in self.seen_ids:
             return False
         self.seen_ids.add(entry["id"])
@@ -170,7 +207,7 @@ class ShortsFeed:
         entries = initial.get("entries")
         if isinstance(entries, list):
             for entry in entries[:MAX_PAGE_ENTRIES]:
-                self._enqueue(_mapping(entry).get("command"))
+                self._enqueue(_mapping(entry).get("command"), card=entry)
         if not self.queue and not self.token:
             raise ShortsFeedError("unavailable")
 
@@ -192,12 +229,14 @@ class ShortsFeed:
             entries = []
         added = 0
         for entry in entries[:MAX_PAGE_ENTRIES]:
-            added += self._enqueue(_mapping(entry).get("command"))
+            added += self._enqueue(_mapping(entry).get("command"), card=entry)
         if added:
             self.empty_pages = 0
         else:
             self.empty_pages += 1
-            if self.token and self.empty_pages >= self.max_empty_pages:
+            if self.token and (self.token in self.seen_tokens or self.empty_pages >= self.max_empty_pages):
+                # An empty/ad-only page with a continuation is not end-of-feed.
+                # An unusable/repeating cursor requires a refresh instead.
                 raise ShortsFeedError("unavailable")
 
     def __next__(self):

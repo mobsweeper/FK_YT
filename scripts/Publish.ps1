@@ -72,7 +72,7 @@ foreach ($tool in @('python/python.exe', 'yt-dlp/yt-dlp.exe', 'mpv/mpv.exe', 'de
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot "runtime/$tool"))) { throw "Missing runtime/$tool. Run Bootstrap first." }
 }
 Assert-RuntimeExecutables $projectRoot $runtimeLock
-foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py')) {
+foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'toolchain_bootstrap.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py')) {
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot "worker/$workerFile"))) { throw "Missing worker file: $workerFile" }
 }
 Assert-RuntimeNotices $projectRoot $runtimeLock
@@ -89,7 +89,7 @@ if (-not (Test-Path -LiteralPath $nugetLock -PathType Leaf)) { throw 'Missing re
 # Publish never updates the reviewed dependency graph implicitly. To update it,
 # run restore --force-evaluate -p:RestoreLockedMode=false explicitly and review the lock.
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-& $dotnet publish (Join-Path $projectRoot 'src/FkYouTube/FkYouTube.csproj') -c Release -r win-x64 --self-contained true -p:RestoreLockedMode=true -p:PublishSingleFile=false --nologo -o $output
+& $dotnet publish (Join-Path $projectRoot 'src/FkYouTube/FkYouTube.csproj') -c Release -r win-x64 --self-contained true -p:RestoreLockedMode=true -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false --nologo -o $output
 if ($LASTEXITCODE -ne 0) { throw "Publish failed with exit code $LASTEXITCODE; incomplete output is preserved." }
 function Copy-RuntimeTree([string]$Source, [string]$Destination) {
     Assert-RegularPublishPath $Source
@@ -109,7 +109,7 @@ function Copy-RuntimeTree([string]$Source, [string]$Destination) {
 Copy-RuntimeTree (Join-Path $projectRoot 'runtime') (Join-Path $output 'runtime')
 $workerOutput = Join-Path $output 'worker'
 New-Item -ItemType Directory -Path $workerOutput -Force | Out-Null
-foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py')) {
+foreach ($workerFile in @('feed_worker.py', 'export_session.py', 'youtube_session.py','selected_ytdlp.py', 'toolchain_bootstrap.py', 'shorts_feed.py', 'recommendation_actions.py', 'related_feed.py', 'home_feed.py', 'channel_feed.py', 'channel_metadata.py')) {
     Assert-RegularPublishPath (Join-Path $projectRoot "worker/$workerFile")
     Copy-Item -LiteralPath (Join-Path $projectRoot "worker/$workerFile") -Destination $workerOutput
 }

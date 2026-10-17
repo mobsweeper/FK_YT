@@ -1,0 +1,54 @@
+FK_YT 1.1 supplementary guide
+
+Release files and availability:
+https://github.com/mobsweeper/FK_YT/releases/tag/v1.1
+Download checksums:
+https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt
+
+1. Starting and keeping your data
+
+For a simple setup, use FK_YT-1.1-portable.zip. Extract the whole ZIP into a new writable folder and run FK_YT.exe inside FK_YT. Portable data is stored in the data folder beside the app.
+
+FK_YT-1.1-Setup-x64.exe installs system-wide with administrator permission. It defaults to native 64-bit Program Files and uses English pages. Close Setup and open FK_YT (System) from Start Menu. The app runs as a normal user and stores each Windows user's data in %LOCALAPPDATA%\FK_YT\data.
+
+Both packages use the same app DLL, features and bundled tools. Preserve FK_YT.install-mode in the installed app, together with runtime, worker, DLLs and legal notices.
+
+Uninstall targets owned program files, shared shortcuts and registration. It preserves every user's settings, sign-in, history, resume positions and downloads, with no data-deletion checkbox. Added, modified or locked program files can remain. To remove a portable copy, close it and delete its folder; deleting data also deletes its app data.
+
+Before updates or data moves, close FK_YT and keep the original. Extract new portable ZIPs into empty folders. Nothing is automatically imported into an installed copy. Copy data only into an empty destination as the same Windows user. Do not merge SQLite databases or overwrite a data directory already in use.
+
+2. Interface and ordinary videos
+
+Theater mode can keep comments/recommendations open. Comments load only when requested. Normal/theater playback controls can be collapsed and restored; that choice lasts for the app session. Fullscreen/popout keep automatic hiding.
+
+An explicit seek to zero in an ordinary video can save the confirmed zero resume position. Initial automatic zero observations do not erase an existing resume position. Incognito and live playback do not use VOD resume saving.
+
+Shorts filtering removes explicitly marked served-ad cards. It preserves ordinary videos and creator paid-promotion disclosures. Every real upstream ad variant has not been verified.
+
+3. Live playback and LIVE
+
+Seeking uses only confirmed local mpv cache ranges, including gaps. LIVE reopens the broadcast edge and preserves an intentional pause. It cannot retrieve data from before you joined or seek through the server's entire DVR window.
+
+Confirmed live playback uses a 6 GiB backward RAM-cache budget per demuxer. It is not allocated in advance and is not a whole-app RAM limit. The forward budget stays 32 MiB and disk caching is disabled. No fixed rewind duration or retention of every past segment is guaranteed.
+
+A stream recognized as live after loading can keep its original budget if next-video preload was already attempted. Reopen it with LIVE to apply the live budget. Ordinary videos keep the existing 32 MiB forward / 8 MiB backward budgets.
+
+After checking broadcast status and error type, live disconnections can retry up to three times after 2/5/10 seconds. Authentication, access and rate-limit errors stop retries. Manual pause, stop, media/account changes and incognito changes cancel recovery. Automatic next-video playback waits for confirmed broadcast end.
+
+Sign-in slots other than guest/default need a validated single muxed audio/video HTTPS HLS stream. Unsupported transports fail explicitly without changing to another account. Live chat, scheduled-stream waiting and recording are not included.
+
+4. Experimental tool updates
+
+Settings offers manual experimental yt-dlp/Deno checks, staging, rollback and bundled-tool restore. There are no automatic online checks or installations. The yt-dlp EXE, matching Python package and EJS are staged together and apply on the next app start. The current process keeps its original tools. Python, mpv and FFmpeg are not updated by this feature.
+
+Keep bundled tools if playback works normally. A new version can break playback, lists, comments or subtitles after offline checks pass. Downloads use official HTTPS services without YouTube cookies. HTTPS hashes do not replace an independent publisher signature.
+
+Tools are stored in portable data\tools or installed %LOCALAPPDATA%\FK_YT\data\tools. Original tools and completed older versions are retained, with no automatic cleanup or total storage cap. Confirmed corrupt rollback candidates are disabled for the current app session. A restart can offer them again, but activation requires revalidation. Cancellation and transient access errors are not all labelled corruption.
+
+Review each downloaded version's notices and corresponding sources before redistributing it. Original release source ZIPs describe only the original bundled versions.
+
+5. Verification and privacy
+
+Earlier preview6 offline regressions, installer fixtures and package checks are not newly passed real YouTube or final 1.1 installation tests. The final 1.1 UAC flow, installation time, installation, installed-app playback, update/removal, fresh long playback, full 6 GiB fill and official tool activation remain separate unverified items.
+
+Incognito does not hide your IP or delete deliberate downloads. Use a dedicated Firefox profile for YouTube. Never attach cookies, authentication tokens, data folders or personal backups to bug reports. External components retain their own licenses; preserve original notices and source-access information.

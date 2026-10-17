@@ -12,7 +12,7 @@ public static class YouTubeAccountOptions
         if(channel is null)return(paths.YtDlp,arguments,null);
         // --add-header is insufficient: yt-dlp's generated API headers can
         // override AuthUser. Reuse the bundled per-instance Python adapter.
-        return(paths.Python,new[]{"-B",Path.Combine(paths.Root,"worker","selected_ytdlp.py")}.Concat(arguments).ToArray(),
+        return(paths.Python,paths.BuildPythonArguments(Path.Combine(paths.Root,"worker","selected_ytdlp.py"),arguments),
             JsonSerializer.Serialize(new{accountContext=channel},JsonDefaults.Options));
     }
     public static string ExtractorArguments(YouTubeChannel? channel,string? youtubeExtra=null)

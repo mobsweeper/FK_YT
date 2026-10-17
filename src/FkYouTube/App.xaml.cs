@@ -4,7 +4,7 @@ namespace FkYouTube;
 public partial class App : Application
 {
     private Mutex? _instance;
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         DispatcherUnhandledException+=(_,args)=>
@@ -15,6 +15,9 @@ public partial class App : Application
         var paths=new RuntimePaths(rootArg>=0 && rootArg+1<e.Args.Length?e.Args[rootArg+1]:null);
         _instance=new Mutex(true,paths.InstanceMutexName,out var first);
         if(!first){MessageBox.Show(UiText.T("이 폴더의 FK_YT가 이미 실행 중입니다.","FK_YT is already running from this folder.","このフォルダーの FK_YT はすでに実行中です。"),"FK_YT");Shutdown();return;}
+        // Freeze the verified local tool selection before constructing services
+        // or starting any worker. Startup does not check for online updates.
+        await paths.InitializeToolchainAsync();
         var window=new MainWindow(paths);MainWindow=window;window.Show();
     }
     protected override void OnExit(ExitEventArgs e){_instance?.Dispose();base.OnExit(e);}

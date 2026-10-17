@@ -1,12 +1,15 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FkYouTube.ProcessSupport;
 using FkYouTube.Services;
+using Microsoft.Win32.SafeHandles;
 
 namespace FkYouTube.Playback;
 
@@ -36,6 +39,9 @@ public sealed class MpvPlayerService : IAsyncDisposable
     private long? _subtitleSelectedId;
     private const int MaxSelectedExternalSubtitles = 12;
     private const int MaxRetainedPlaybackCookies = 12;
+    // Limit each confirmed live demuxer's backward RAM cache to 6 GiB. This is
+    // neither a startup allocation nor a cap on the entire process working set.
+    private const string LiveBackwardCacheBytes = "6442450944";
     private static string MediaFailureMessage => UiText.T("영상을 재생하지 못했습니다. 다시 재생하거나 다른 영상을 선택하세요.","Could not play this video. Try again or choose another video.","動画を再生できませんでした。再試行するか、別の動画を選択してください。");
     private const string ExtractionResultProperty = "user-data/mpv/ytdl/json-subprocess-result";
     private int _disposed;
@@ -170,7 +176,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
                 "--input-default-bindings=no", "--input-vo-keyboard=no", "--osc=no", "--osd-bar=no",
                 "--load-console=no", "--load-commands=no", "--load-select=no", "--load-stats-overlay=no",
                 "--hwdec=auto", "--vo=gpu-next", "--gpu-context=d3d11", "--ytdl=yes",
-                "--cache-secs=15", "--demuxer-max-bytes=32MiB", "--demuxer-max-back-bytes=8MiB", "--prefetch-playlist=yes",
+                "--cache-secs=15", "--cache-on-disk=no", "--demuxer-max-bytes=32MiB", "--demuxer-max-back-bytes=8MiB", "--prefetch-playlist=yes",
                 // A prefetch opener can run before the next entry's file-local
                 // options apply. Match the pinned YouTube extractor's 10 MiB
                 // request limit from process start; per-file hints still follow.
@@ -193,10 +199,12 @@ public sealed class MpvPlayerService : IAsyncDisposable
             try
             {
                 await session.Pipe.ConnectAsync(10000, session.Token).ConfigureAwait(false);
+                VerifyPipeServer(session.Pipe, session.Process);
                 session.Reader = new StreamReader(session.Pipe, new UTF8Encoding(false), false, 4096, leaveOpen: true);
                 session.Writer = new StreamWriter(session.Pipe, new UTF8Encoding(false), 4096, leaveOpen: true) { AutoFlush = true, NewLine = "\n" };
                 session.ReadTask = ReadMessagesAsync(session);
-                var observations = new[] { "time-pos", "duration", "pause", "paused-for-cache", "seeking", "speed", "volume", "hwdec-current",ExtractionResultProperty+"/status",ExtractionResultProperty+"/stderr" };
+                var observations = new[] { "time-pos", "duration", "pause", "paused-for-cache", "seeking", "speed", "volume", "hwdec-current",
+                    "seekable", "partially-seekable", "demuxer-cache-state", "cache-buffering-state",ExtractionResultProperty+"/status",ExtractionResultProperty+"/stderr" };
                 for (var i = 0; i < observations.Length; i++)
                     await SendAsync(session, new object[] { "observe_property", i + 1, observations[i] }, CancellationToken.None).ConfigureAwait(false);
             }
@@ -209,14 +217,43 @@ public sealed class MpvPlayerService : IAsyncDisposable
         finally { _startGate.Release(); }
     }
 
+    private static void VerifyPipeServer(NamedPipeClientStream pipe, OwnedProcess process)
+    {
+        // The unpredictable name and mpv's own server ACL do not authenticate a
+        // different local process that won the name. Verify before any IPC I/O.
+        if (process.HasExited) throw new IOException("The owned mpv process exited before IPC verification.");
+        if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var serverId))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (serverId != (uint)process.Id || process.HasExited)
+            throw new IOException("The mpv IPC server does not belong to the retained process.");
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
+
     public async Task LoadAsync(string youtubeUrl, string? cookiePath, int maxHeight, double startSeconds = 0,
         CancellationToken cancellationToken = default, YouTubeChannel? accountContext = null, PreparedVideo? resolvedStream = null,
-        Func<CancellationToken, Task<PreparedVideo>>? resolveStream = null, bool startPaused = false, PauseIntent? pauseIntent = null)
+        Func<CancellationToken, Task<PreparedVideo>>? resolveStream = null, bool startPaused = false, PauseIntent? pauseIntent = null,
+        LiveHlsMedia? liveStream = null, Func<CancellationToken,Task<LiveHlsMedia>>? resolveLiveStream = null,
+        Func<CancellationToken,Task<PlaybackResolution>>? resolvePlayback = null, bool knownNativeLive = false)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         // Supplied metadata is known before ownership changes. A late account resolver
         // still runs after stop and follows the owned-load failure cleanup below.
-        var directSource = resolvedStream is null ? null : ValidateDirectMedia(resolvedStream);
+        if((liveStream is not null || resolveLiveStream is not null) && (resolvedStream is not null || resolveStream is not null))
+            throw new ArgumentException("Supply either VOD media or live media, not both.");
+        if(resolvePlayback is not null && (resolvedStream is not null || resolveStream is not null || liveStream is not null || resolveLiveStream is not null))
+            throw new ArgumentException("Supply either the unified resolver or explicit media, not both.");
+        // Keep the ordinary extractor route when its own metadata already identified
+        // a live guest/default-slot video. Other login slots still require the
+        // authoritative resolved-media route and can never enter this path.
+        if(knownNativeLive && accountContext is {AuthUser:>0})
+            throw new InvalidOperationException(UiText.T("선택한 Google 로그인 계정의 영상은 계정 확인이 끝난 스트림 정보가 필요합니다. 다시 재생해 주세요.","Videos for the selected Google account require verified stream information. Try playing the video again.","選択した Google アカウントの動画には、アカウント確認済みのストリーム情報が必要です。もう一度再生してください。"));
+        if(knownNativeLive && (resolvedStream is not null || resolveStream is not null || liveStream is not null || resolveLiveStream is not null || resolvePlayback is not null))
+            throw new ArgumentException("Native live intent cannot be combined with resolved media.");
+        var liveRequest=knownNativeLive || liveStream is not null || resolveLiveStream is not null;
+        var directSource = liveStream is not null ? ValidateLiveMedia(liveStream,youtubeUrl) : resolvedStream is null ? null : ValidateDirectMedia(resolvedStream);
         if (!Uri.TryCreate(youtubeUrl, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps ||
             !(url.Host.Equals("youtube.com", StringComparison.OrdinalIgnoreCase) || url.Host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase) || url.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("A YouTube HTTPS video URL is required.", nameof(youtubeUrl));
@@ -230,7 +267,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
         try
         {
             if (_host == 0) throw new InvalidOperationException("Call StartAsync with a live MpvHost before loading a video.");
-            if (accountContext is { AuthUser: > 0 } && resolvedStream is null && resolveStream is null)
+            if (accountContext is { AuthUser: > 0 } && resolvedStream is null && resolveStream is null && resolvePlayback is null && !liveRequest)
                 lock (_stateLock)
                 {
                     if (_session is not { } existing || _preparedNext is not { } candidate || !ReferenceEquals(candidate.Session, existing) ||
@@ -258,18 +295,20 @@ public sealed class MpvPlayerService : IAsyncDisposable
             PreparedNext? prepared;
             lock (_stateLock)
             {
-                prepared = _preparedNext is { } next && ReferenceEquals(next.Session, session) &&
+                prepared = !liveRequest && _preparedNext is { } next && ReferenceEquals(next.Session, session) &&
                     next.OriginGeneration == _snapshot.MediaGeneration && next.VideoUrl == youtubeUrl &&
                     next.MaxHeight == YouTubeService.NormalizeMaxHeight(maxHeight) && startSeconds == 0 ? next : null;
-                if (accountContext is { AuthUser: > 0 } && resolvedStream is null && prepared is null && resolveStream is null)
+                if (accountContext is { AuthUser: > 0 } && resolvedStream is null && prepared is null && resolveStream is null && resolvePlayback is null && !liveRequest)
                     throw new InvalidOperationException(UiText.T("선택한 Google 로그인 계정의 영상은 계정 확인이 끝난 스트림 정보가 필요합니다. 다시 재생해 주세요.","Videos for the selected Google account require verified stream information. Try playing the video again.","選択した Google アカウントの動画には、アカウント確認済みのストリーム情報が必要です。もう一度再生してください。"));
                 _preparedNext = null;
                 generation = ++_mediaGeneration;
                 session.MediaGeneration = generation; _lastLoadSession = session;
+                session.CachePrefetchGeneration = -1;
                 session.CookieConsumerGeneration = cookiePath is null ? -1 : generation;
                 session.ExtractionMetadata.Clear();session.ExtractionFailures.Clear();
                 ResetExternalSubtitleCache(session,generation);
-                _snapshot = new PlaybackSnapshot { MediaGeneration = generation, VideoUrl = youtubeUrl, Buffering = true, Paused = pauseIntent?.Paused??startPaused, Volume = _snapshot.Volume };
+                _snapshot = new PlaybackSnapshot { MediaGeneration = generation, VideoUrl = youtubeUrl, Buffering = true, Paused = pauseIntent?.Paused??startPaused, Volume = _snapshot.Volume,
+                    LiveStatus=liveRequest?"is_live":"unknown" };
                 _lastSnapshotAt = 0;
             }
             PublishSnapshot();
@@ -280,7 +319,36 @@ public sealed class MpvPlayerService : IAsyncDisposable
             }
             // Stop the previous extractor before changing global hook options.
             await SendAsync(session, new object[] { "stop" }, cancellationToken).ConfigureAwait(false);
-            if (accountContext is { AuthUser: > 0 } && resolvedStream is null)
+            if(resolvePlayback is not null)
+            {
+                // Resolve after claiming this generation and stopping its previous
+                // native consumer, exactly as the original selected-account path.
+                // A preloaded VOD adopted above never pays for a second extraction.
+                var resolution=await resolvePlayback(cancellationToken).ConfigureAwait(false)
+                    ?? throw new InvalidDataException(UiText.T("영상 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.","The video response is invalid. Try again.","動画の応答形式が正しくありません。もう一度お試しください。"));
+                cancellationToken.ThrowIfCancellationRequested();
+                if(!YouTubeService.TryVideoUrl(youtubeUrl,out var expectedVideoId,out _) || resolution.Status is not {} status ||
+                    status.VideoId!=expectedVideoId || !(YouTubeService.IsKnownLiveStatus(status.LiveStatus) || status.LiveStatus=="unknown") ||
+                    resolution.Vod is not null && resolution.Live is not null)
+                    throw new InvalidDataException(UiText.T("영상 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.","The video response is invalid. Try again.","動画の応答形式が正しくありません。もう一度お試しください。"));
+                UpdateGeneration(generation,snapshot=>snapshot with{LiveStatus=status.LiveStatus});
+                if(status.IsUpcoming || status.LiveStatus=="post_live")
+                    throw new InvalidOperationException(status.IsUpcoming
+                        ?UiText.T("방송 예정입니다. 방송이 시작된 뒤 다시 여세요.","This stream is scheduled. Open it after the broadcast starts.","配信開始前です。開始後に開き直してください。")
+                        :UiText.T("방송이 종료되어 녹화 영상을 처리 중입니다.","The broadcast has ended and its recording is processing.","配信が終了し、録画を処理中です。"));
+                if(status.IsLive ? resolution.Live is null || resolution.Vod is not null : resolution.Vod is null || resolution.Live is not null)
+                    throw new InvalidDataException(UiText.T("영상 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.","The video response is invalid. Try again.","動画の応答形式が正しくありません。もう一度お試しください。"));
+                resolvedStream=resolution.Vod;liveStream=resolution.Live;liveRequest=liveStream is not null;
+                directSource=liveStream is not null?ValidateLiveMedia(liveStream,youtubeUrl):ValidateDirectMedia(resolvedStream!);
+            }
+            if(liveRequest && !knownNativeLive && liveStream is null)
+            {
+                liveStream=await resolveLiveStream!(cancellationToken).ConfigureAwait(false)
+                    ?? throw new InvalidOperationException("The selected live stream could not be resolved.");
+                cancellationToken.ThrowIfCancellationRequested();
+                directSource=ValidateLiveMedia(liveStream,youtubeUrl);
+            }
+            if (accountContext is { AuthUser: > 0 } && resolvedStream is null && liveStream is null)
             {
                 if (resolveStream is null)
                     throw new InvalidOperationException(UiText.T("선택한 Google 로그인 계정의 영상은 계정 확인이 끝난 스트림 정보가 필요합니다. 다시 재생해 주세요.","Videos for the selected Google account require verified stream information. Try playing the video again.","選択した Google アカウントの動画には、アカウント確認済みのストリーム情報が必要です。もう一度再生してください。"));
@@ -301,6 +369,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
             };
             if (cookiePath is not null) raw["cookies"] = Path.GetFullPath(cookiePath);
             if (extractorArguments.Length > 0) raw["extractor-args"] = extractorArguments;
+            if(knownNativeLive)raw["no-live-from-start"]="";
             await SendAsync(session, new object[] { "set_property", "ytdl-raw-options", raw }, cancellationToken).ConfigureAwait(false);
             var format = YouTubeService.VideoFormat(maxHeight);
             await SendAsync(session, new object[] { "set_property", "ytdl-format", format }, cancellationToken).ConfigureAwait(false);
@@ -310,7 +379,15 @@ public sealed class MpvPlayerService : IAsyncDisposable
                 ["pause"] = startPaused ? "yes" : "no"
             };
             AddSubtitleOptions(options);
-            if (resolvedStream is not null)
+            AddCacheOptions(options,liveRequest);
+            // Neither a cached VOD resume position nor an explicit numeric seek
+            // is an origin for an already-known rolling live timeline.
+            if(liveRequest)options.Remove("start");
+            if (liveStream is not null)
+            {
+                AddHttpHeaders(options,liveStream.Headers);
+            }
+            else if (resolvedStream is not null)
             {
                 AddHttpHeaders(options, resolvedStream.Headers);
                 AddHttpChunkOptions(options, resolvedStream.HttpChunkSize);
@@ -327,12 +404,12 @@ public sealed class MpvPlayerService : IAsyncDisposable
                     if (item.TryGetProperty("filename", out var filename) && filename.GetString() == playbackSource && item.TryGetProperty("id", out var id) && id.TryGetInt64(out var candidate)) { entry = candidate; break; }
             }
             if (entry is null) throw new InvalidOperationException("mpv did not retain the requested playlist entry.");
-            Interlocked.Exchange(ref session.DirectEntry, resolvedStream is not null ? entry.Value : -1);
+            Interlocked.Exchange(ref session.DirectEntry, resolvedStream is not null || liveStream is not null ? entry.Value : -1);
             JsonElement? ended = null;
             lock (_stateLock)
             {
                 _entryGenerations[entry.Value] = generation;
-                if (_loadedEntries.Contains(entry.Value)) _snapshot = _snapshot with { Loaded = true, Buffering = false, CanReleaseCookies = resolvedStream is not null };
+                if (_loadedEntries.Contains(entry.Value)) _snapshot = _snapshot with { Loaded = true, Buffering = false, CanReleaseCookies = resolvedStream is not null || liveStream is not null };
                 if (_endedEntries.TryGetValue(entry.Value, out var end)) ended = end;
                 // Retain a bounded amount of old IDs so delayed end-file events remain distinguishable.
                 foreach (var old in _entryGenerations.Where(p => p.Value < generation - 8).Select(p => p.Key).ToArray())
@@ -341,7 +418,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
             if (ended.HasValue) HandleEndFile(session, ended.Value);
             else await RefreshPropertiesAsync(session, generation, cancellationToken).ConfigureAwait(false);
             PublishSnapshot();
-            if (resolvedStream is null && Snapshot.Loaded) _ = RefreshCookieReleaseSafetyAsync(session, entry.Value, generation);
+            if (resolvedStream is null && liveStream is null && Snapshot.Loaded) _ = RefreshCookieReleaseSafetyAsync(session, entry.Value, generation);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -366,7 +443,8 @@ public sealed class MpvPlayerService : IAsyncDisposable
                 if(generation!=0 && loadingSession is{ } failedSession)
                     await CloseFailedLoadSessionAsync(failedSession,generation).ConfigureAwait(false);
                 if (generation != 0) UpdateGeneration(generation, s => s with { Ended = true, EndReason="error", Loaded = false, Buffering = false, Seeking = false,
-                    ErrorMessage=message,AuthenticationRequired=access?.AuthenticationRequired==true });
+                    ErrorMessage=message,ErrorCode=access is not null && ProcessRunner.IsErrorCode(access.Code)?access.Code:"generic",
+                    FailureClassificationPending=false,AuthenticationRequired=access?.AuthenticationRequired==true });
                 RaiseError(message, generation);
             }
             throw;
@@ -409,13 +487,13 @@ public sealed class MpvPlayerService : IAsyncDisposable
         {
             session = _session;
             lock (_stateLock)
-                if (session is null || _snapshot.MediaGeneration != expectedMediaGeneration || !_snapshot.Loaded || _snapshot.Ended ||
+                if (session is null || _snapshot.MediaGeneration != expectedMediaGeneration || !_snapshot.Loaded || _snapshot.Ended || _snapshot.IsLive ||
                     _activeEntry is not { } active || !IsCurrentEntry(active)) return false;
             lock (_stateLock) currentEntry = _activeEntry!.Value;
             await ClearPreparedNextCoreAsync(session).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             lock (_stateLock)
-                if (!ReferenceEquals(_session, session) || _snapshot.MediaGeneration != expectedMediaGeneration || !_snapshot.Loaded || _snapshot.Ended) return false;
+                if (!ReferenceEquals(_session, session) || _snapshot.MediaGeneration != expectedMediaGeneration || !_snapshot.Loaded || _snapshot.Ended || _snapshot.IsLive) return false;
             // A failed history cleanup must not let every subsequent prepare grow the native playlist.
             var trimmed = await TryTrimPlaylistAsync(session, currentEntry, expectedMediaGeneration).ConfigureAwait(false);
             if (trimmed is null) return false;
@@ -426,11 +504,15 @@ public sealed class MpvPlayerService : IAsyncDisposable
             // and leaves successfully opened non-whitelisted direct media URLs untouched.
             var options = new Dictionary<string, string> { ["start"] = "0", ["pause"] = "yes" };
             AddSubtitleOptions(options);
+            AddCacheOptions(options,false);
             if (httpHeaders is not null) AddHttpHeaders(options, httpHeaders);
             AddHttpChunkOptions(options, httpChunkSize);
             // Do not abandon an IPC append reply on cancellation: the entry ID is needed for exact cleanup.
             cancellationToken.ThrowIfCancellationRequested();
             appendSubmitted = true;
+            // Even a failed/unconfirmed append can leave mpv's opener alive after
+            // playlist removal. A later live discovery must not enlarge that VOD.
+            session.CachePrefetchGeneration = expectedMediaGeneration;
             var result = await SendAsync(session, new object[] { "loadfile", resolvedMediaUrl, "append", -1, options }, CancellationToken.None).ConfigureAwait(false);
             long? entry = result is { ValueKind: JsonValueKind.Object } response && response.TryGetProperty("playlist_entry_id", out var entryId) && entryId.TryGetInt64(out var parsed) ? parsed : null;
             if (entry is null)
@@ -737,18 +819,67 @@ public sealed class MpvPlayerService : IAsyncDisposable
             if (Interlocked.Exchange(ref session.CookieMetadataEntry, entry) == entry) return;
             var result = await SendAsync(session, new object[] { "get_property", "user-data/mpv/ytdl/json-subprocess-result" },
                 CancellationToken.None, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
-            if (result is not { } metadata || !IsConfirmedVodResult(metadata)) return;
+            if (result is not { } metadata) return;
+            var vod=IsConfirmedVodResult(metadata);
+            var liveStatus=ExtractedLiveStatus(metadata);
+            if(!vod && liveStatus=="unknown")return;
             lock (_stateLock)
             {
                 if (!ReferenceEquals(_session, session) || _snapshot.MediaGeneration != generation ||
                     !_snapshot.Loaded || _snapshot.Ended || _activeEntry != entry || !IsCurrentEntry(entry)) return;
-                _snapshot = _snapshot with { CanReleaseCookies = true };
+                _snapshot = _snapshot with { CanReleaseCookies = vod, LiveStatus=liveStatus };
             }
             PublishSnapshot();
+            if(liveStatus=="is_live")await ApplyExtractedLiveCacheAsync(session,entry,generation).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException or OperationCanceledException or JsonException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ObjectDisposedException or OperationCanceledException or JsonException)
         { /* Missing or ambiguous metadata keeps the lease; it must never break playback. */ }
         finally { if (entered) _loadGate.Release(); }
+    }
+
+    private static void AddCacheOptions(Dictionary<string,string> options,bool live)
+    {
+        options["cache-on-disk"]="no";
+        options["demuxer-max-bytes"]="32MiB";
+        options["demuxer-max-back-bytes"]=live?LiveBackwardCacheBytes:"8MiB";
+        if(!live)return;
+        // The unused forward budget otherwise increases the backward allowance.
+        options["demuxer-donate-buffer"]="no";
+        // mpv opens a prefetched URL with the current file's demuxer options,
+        // before applying the next entry's options. Keep VOD preloads isolated.
+        options["prefetch-playlist"]="no";
+    }
+
+    // Caller holds the load gate. Native EOF can still advance a playlist, so
+    // mpv itself must test the playing entry immediately before each setter.
+    private async Task ApplyExtractedLiveCacheAsync(Session session,long entry,long generation)
+    {
+        bool Current()
+        {
+            lock(_stateLock)return ReferenceEquals(_session,session) && _snapshot.MediaGeneration==generation &&
+                _snapshot.Loaded && !_snapshot.Ended && _snapshot.IsLive && _activeEntry==entry && IsCurrentEntry(entry) &&
+                session.CachePrefetchGeneration!=generation;
+        }
+        if(!Current())return;
+        // A previous append may already have a demuxer, even after its playlist
+        // entry was removed. Retain 8 MiB for that first unknown-live playback;
+        // a subsequent known-live load removes the practical cap before opening media.
+        var playlist=ReadPreparedPlaylist(await SendAsync(session,["get_property","playlist"],
+            CancellationToken.None,TimeSpan.FromSeconds(2)).ConfigureAwait(false));
+        if(!Current() || !playlist.TryGetValue(entry,out var native) || !native.Active)return;
+        foreach(var (option,value) in new[]{("prefetch-playlist","no"),("demuxer-donate-buffer","no"),("demuxer-max-back-bytes",LiveBackwardCacheBytes)})
+        {
+            if(!Current())return;
+            var property=GuardedCacheOption(native.Index,entry,option);
+            await SendAsync(session,["expand-properties","set",property,value],CancellationToken.None,TimeSpan.FromSeconds(2),
+                beforeWrite:()=>{if(!Current())throw new OperationCanceledException();}).ConfigureAwait(false);
+        }
+    }
+
+    private static string GuardedCacheOption(int index,long entry,string option)
+    {
+        var path="playlist/"+index.ToString(CultureInfo.InvariantCulture);
+        return "${?="+path+"/id=="+entry.ToString(CultureInfo.InvariantCulture)+":${?="+path+"/playing==yes:file-local-options/"+option+"}}";
     }
 
     private static bool IsConfirmedVodResult(JsonElement result)
@@ -768,6 +899,19 @@ public sealed class MpvPlayerService : IAsyncDisposable
         catch (JsonException) { return false; }
     }
 
+    private static string ExtractedLiveStatus(JsonElement result)
+    {
+        if(result.ValueKind!=JsonValueKind.Object || !result.TryGetProperty("status",out var status) ||
+            status.ValueKind!=JsonValueKind.Number || !status.TryGetInt32(out var code) || code!=0 ||
+            !result.TryGetProperty("stdout",out var output) || output.ValueKind!=JsonValueKind.String)return "unknown";
+        try
+        {
+            using var doc=JsonDocument.Parse(output.GetString()!);
+            return YouTubeService.ParsePlaybackStatus(doc.RootElement).LiveStatus;
+        }
+        catch(Exception error)when(error is JsonException or InvalidDataException){return "unknown";}
+    }
+
     private static string DirectMediaSource(string source)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
@@ -784,6 +928,21 @@ public sealed class MpvPlayerService : IAsyncDisposable
     {
         ValidateHttpChunkSize(media.HttpChunkSize);
         return DirectMediaSource(media.MediaUrl);
+    }
+
+    private static string ValidateLiveMedia(LiveHlsMedia media,string youtubeUrl)
+    {
+        if(!YouTubeService.TryVideoUrl(youtubeUrl,out var videoId,out _) || media.VideoId!=videoId ||
+            media.MediaUrl is not {} text || text.Length is <1 or >16384 || text.Any(character=>char.IsWhiteSpace(character)||char.IsControl(character)) || text.Contains('\\') ||
+            !Uri.TryCreate(text,UriKind.Absolute,out var source) || source.Scheme!=Uri.UriSchemeHttps || source.Host!="manifest.googlevideo.com" ||
+            !source.IsDefaultPort || !string.IsNullOrEmpty(source.UserInfo) || !string.IsNullOrEmpty(source.Fragment) ||
+            !source.AbsolutePath.StartsWith("/api/manifest/hls_playlist/",StringComparison.Ordinal) || !source.AbsolutePath.EndsWith(".m3u8",StringComparison.Ordinal))
+            throw new ArgumentException("A verified selected live rendition for this YouTube video is required.",nameof(media));
+        if(media.Headers is null || media.Headers.Count>16)throw new ArgumentException("Invalid live headers.",nameof(media));
+        foreach(var header in media.Headers)
+            if(!YouTubeService.IsBenignLiveHeader(header.Key) || header.Value is null || header.Value.Length>8192 || header.Value.Any(char.IsControl))
+                throw new ArgumentException("Invalid live headers.",nameof(media));
+        return MpvPreparedMedia.BuildLiveEdlUrl(text);
     }
 
     private static void ValidateHttpChunkSize(int? httpChunkSize)
@@ -1409,7 +1568,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
                         if (session.FileReady.TryRemove(active, out var ready)) ready.TrySetResult(true);
                         if (IsCurrentEntry(active))
                         {
-                            _snapshot = _snapshot with { Loaded = true, Ended = false, EndReason = null, Buffering = false,ErrorMessage=null,AuthenticationRequired=false,
+                            _snapshot = _snapshot with { Loaded = true, Ended = false, EndReason = null, Buffering = false,ErrorMessage=null,ErrorCode=null,FailureClassificationPending=false,AuthenticationRequired=false,
                                 CanReleaseCookies = Interlocked.Read(ref session.DirectEntry) == active };
                             loadedEntry = active; loadedGeneration = _snapshot.MediaGeneration;
                         }
@@ -1482,8 +1641,17 @@ public sealed class MpvPlayerService : IAsyncDisposable
             current = IsCurrentEntry(entry);
             adopting = entry == Interlocked.Read(ref session.AdoptingEntry);
             generation=_snapshot.MediaGeneration;
-            if (current && !adopting) _snapshot = _snapshot with { Ended = true, EndReason = message.TryGetProperty("reason",out var endReason)?endReason.GetString():null, Loaded = false, Buffering = false, Seeking = false,
-                ErrorMessage=failed?MediaFailureMessage:_snapshot.ErrorMessage,AuthenticationRequired=failed?false:_snapshot.AuthenticationRequired };
+            if (current && !adopting)
+            {
+                // Classification may require an IPC read after this event. A live
+                // retry must wait for it instead of treating the interim error as
+                // generic. Retain already captured codes if the pipe then closes.
+                var capturedCode=failed && session.ExtractionFailures.TryGetValue(entry,out var captured) && captured.Generation==generation
+                    ?captured.Code:null;
+                _snapshot = _snapshot with { Ended = true, EndReason = message.TryGetProperty("reason",out var endReason)?endReason.GetString():null, Loaded = false, Buffering = false, Seeking = false,
+                    ErrorMessage=failed?MediaFailureMessage:_snapshot.ErrorMessage,ErrorCode=capturedCode,
+                    FailureClassificationPending=failed,AuthenticationRequired=failed?capturedCode=="signin_age":_snapshot.AuthenticationRequired };
+            }
         }
         if (!current || adopting) return;
         PublishSnapshot();
@@ -1501,19 +1669,24 @@ public sealed class MpvPlayerService : IAsyncDisposable
         try
         {
             await _loadGate.WaitAsync(session.Token).ConfigureAwait(false);held=true;
-            bool Current(){lock(_stateLock)return ReferenceEquals(_session,session) && _snapshot.MediaGeneration==generation && _activeEntry==entry && IsCurrentEntry(entry) && _snapshot.Ended && _snapshot.EndReason=="error";}
+            bool Current(){lock(_stateLock)return ReferenceEquals(_session,session) && _snapshot.MediaGeneration==generation && IsCurrentEntry(entry) && _snapshot.Ended && _snapshot.EndReason=="error";}
+            bool NativeEntryActive(){lock(_stateLock)return _activeEntry==entry;}
             if(!Current())return;
             var code="generic";
             if(Interlocked.Read(ref session.DirectEntry)!=entry)
             {
                 bool Cached(){lock(_stateLock){if(session.ExtractionFailures.TryGetValue(entry,out var failure) && failure.Generation==generation){code=failure.Code;return true;}return false;}}
-                if(!Cached())try
+                // Native EOF/error can advance to an already prepared entry while
+                // the app still owns this failed generation. Settle its pending
+                // classification from captured evidence (or generic), never from
+                // the successor's extraction properties.
+                if(!Cached() && NativeEntryActive())try
                 {
                     var status=await SendAsync(session,["get_property",ExtractionResultProperty+"/status"],session.Token,TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-                    if(status is{ValueKind:JsonValueKind.Number} value && value.TryGetInt32(out var number) && number!=0)
+                    if(NativeEntryActive() && status is{ValueKind:JsonValueKind.Number} value && value.TryGetInt32(out var number) && number!=0)
                     {
                         var stderr=await SendAsync(session,["get_property",ExtractionResultProperty+"/stderr"],session.Token,TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-                        if(stderr is{ValueKind:JsonValueKind.String} diagnostic && diagnostic.GetString() is{ } text && text.Length<=BoundedTextReader.CommandErrorLimit)
+                        if(NativeEntryActive() && stderr is{ValueKind:JsonValueKind.String} diagnostic && diagnostic.GetString() is{ } text && text.Length<=BoundedTextReader.CommandErrorLimit)
                             code=ProcessRunner.ClassifyError(text);
                     }
                 }
@@ -1524,7 +1697,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
             lock(_stateLock)
             {
                 if(!Current())return;
-                _snapshot=_snapshot with{ErrorMessage=message,AuthenticationRequired=code=="signin_age"};
+                _snapshot=_snapshot with{ErrorMessage=message,ErrorCode=code,FailureClassificationPending=false,AuthenticationRequired=code=="signin_age"};
             }
             PublishSnapshot();RaiseError(message,generation,session);
         }
@@ -1553,18 +1726,24 @@ public sealed class MpvPlayerService : IAsyncDisposable
             switch (name)
             {
                 case "time-pos" when value.TryGetDoubleSafe(out var position): s = s with { Position = Math.Max(0, position) }; break;
-                case "duration" when value.TryGetDoubleSafe(out var duration): s = s with { Duration = Math.Max(0, duration) }; break;
+                case "duration": s = s with { Duration = value.TryGetDoubleSafe(out var duration)?Math.Max(0, duration):0 }; break;
                 case "pause" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: s = s with { Paused = value.GetBoolean() }; break;
                 case "paused-for-cache" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: s = s with { Buffering = !s.Loaded || value.GetBoolean() }; break;
                 case "seeking" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: s = s with { Seeking = value.GetBoolean() }; break;
                 case "speed" when value.TryGetDoubleSafe(out var speed): s = s with { Speed = speed }; break;
                 case "volume" when value.TryGetDoubleSafe(out var volume): s = s with { Volume = volume }; break;
                 case "hwdec-current": s = s with { HardwareDecoder = value.ValueKind == JsonValueKind.String ? value.GetString() ?? "unavailable" : "unavailable" }; break;
+                case "seekable": s=s with{Seekable=value.ValueKind==JsonValueKind.True};break;
+                case "partially-seekable": s=s with{PartiallySeekable=value.ValueKind==JsonValueKind.True};break;
+                case "cache-buffering-state": s=s with{CacheBufferingState=value.TryGetDoubleSafe(out var fill)?Math.Clamp(fill,0,100):0};break;
+                case "demuxer-cache-state":
+                    var cacheDuration=value.ValueKind==JsonValueKind.Object && value.TryGetProperty("cache-duration",out var cache) && cache.TryGetDoubleSafe(out var seconds)?Math.Max(0,seconds):0;
+                    s=s with{SeekableRanges=ParseCacheSeekRanges(value),CacheDuration=cacheDuration};break;
                 default: return;
             }
             _snapshot = s;
             var now = Environment.TickCount64;
-            publish = name != "time-pos" || now - _lastSnapshotAt >= 250;
+            publish = name is not ("time-pos" or "demuxer-cache-state") || now - _lastSnapshotAt >= 250;
             if (publish) _lastSnapshotAt = now;
         }
         if (publish) PublishSnapshot();
@@ -1572,7 +1751,8 @@ public sealed class MpvPlayerService : IAsyncDisposable
 
     private async Task RefreshPropertiesAsync(Session session, long generation, CancellationToken cancellationToken)
     {
-        foreach (var name in new[] { "time-pos", "duration", "pause", "paused-for-cache", "seeking", "speed", "volume", "hwdec-current" })
+        foreach (var name in new[] { "time-pos", "duration", "pause", "paused-for-cache", "seeking", "speed", "volume", "hwdec-current",
+            "seekable", "partially-seekable", "demuxer-cache-state", "cache-buffering-state" })
         {
             try
             {
@@ -1581,6 +1761,22 @@ public sealed class MpvPlayerService : IAsyncDisposable
             }
             catch (InvalidOperationException) { /* Some properties are unavailable until a decoder exists. */ }
         }
+    }
+
+    public static IReadOnlyList<PlaybackSeekRange> ParseCacheSeekRanges(JsonElement state)
+    {
+        if(state.ValueKind!=JsonValueKind.Object || !state.TryGetProperty("seekable-ranges",out var ranges) || ranges.ValueKind!=JsonValueKind.Array)return [];
+        // Bound malformed/native input and retain separate islands: a gap is not
+        // seekable merely because it lies between the first and last timestamp.
+        var parsed=new List<PlaybackSeekRange>();
+        foreach(var item in ranges.EnumerateArray().Take(64))
+            if(item.ValueKind==JsonValueKind.Object && item.TryGetProperty("start",out var start) && start.TryGetDoubleSafe(out var from) &&
+                item.TryGetProperty("end",out var end) && end.TryGetDoubleSafe(out var to) && to>Math.Max(0,from))parsed.Add(new(Math.Max(0,from),to));
+        var merged=new List<PlaybackSeekRange>();
+        foreach(var range in parsed.OrderBy(item=>item.Start))
+            if(merged.Count>0 && range.Start<=merged[^1].End)merged[^1]=merged[^1] with{End=Math.Max(merged[^1].End,range.End)};
+            else merged.Add(range);
+        return Array.AsReadOnly(merged.ToArray());
     }
 
     private void UpdateGeneration(long generation, Func<PlaybackSnapshot, PlaybackSnapshot> update)
@@ -1647,8 +1843,17 @@ public sealed class MpvPlayerService : IAsyncDisposable
             if (session.StopRequested || session.Token.IsCancellationRequested || session.DisconnectReported ||
                 !ReferenceEquals(_session, session) || session.MediaGeneration != _snapshot.MediaGeneration) return;
             session.DisconnectReported = true;
+            var code=_snapshot.ErrorCode;
+            // The extractor's status/stderr can precede end-file, or arrive while
+            // refinement is waiting for the load gate. A broken pipe must not
+            // downgrade that exact current entry's known access failure to network.
+            if(_activeEntry is{ } entry && IsCurrentEntry(entry) &&
+                session.ExtractionFailures.TryGetValue(entry,out var captured) && captured.Generation==_snapshot.MediaGeneration)
+                code=captured.Code;
             failure = _snapshot = _snapshot with { Ended = true, EndReason = "error", Loaded = false,
-                Buffering = false, Seeking = false, ErrorMessage = _snapshot.ErrorMessage ?? message };
+                Buffering = false, Seeking = false, ErrorMessage = _snapshot.ErrorMessage ?? message,
+                ErrorCode = code ?? "network", FailureClassificationPending = false,
+                AuthenticationRequired = code=="signin_age" || _snapshot.AuthenticationRequired };
         }
         PublishSnapshot(failure);
         RaiseError(failure.ErrorMessage!, failure.MediaGeneration, session);
@@ -1673,6 +1878,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
         lock (_stateLock)
         {
             session.StopRequested = true;
+            session.CachePrefetchGeneration = -1;
             if (ReferenceEquals(_session, session)) _session = null;
             _retainedCookieSessions.Add(session);
             if (_preparedNext is { } prepared && ReferenceEquals(prepared.Session, session)) _preparedNext = null;
@@ -1787,6 +1993,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
         public long AdoptingEntry = -1;
         public long DirectEntry = -1;
         public long CookieMetadataEntry = -1;
+        public long CachePrefetchGeneration = -1;
         public long ErrorMetadataGeneration = -1;
         public bool HasPlaybackCookies;
         public long MediaGeneration;

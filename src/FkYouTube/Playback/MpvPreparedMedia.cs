@@ -18,4 +18,13 @@ public static class MpvPreparedMedia
     }
 
     internal static string Escape(string value) => "%" + Encoding.UTF8.GetByteCount(value).ToString(CultureInfo.InvariantCulture) + "%" + value;
+
+    /// <summary>Preserves an open-ended single live source while preventing yt-dlp fallback.</summary>
+    public static string BuildLiveEdlUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
+            !uri.IsDefaultPort || !string.IsNullOrEmpty(uri.UserInfo) || url.Any(char.IsControl))
+            throw new ArgumentException("A resolved HTTPS live media URL is required.", nameof(url));
+        return "edl://!no_clip;!no_chapters;" + Escape(url);
+    }
 }

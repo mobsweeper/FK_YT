@@ -1,4 +1,5 @@
 """Small, read-only channel metadata helpers. Never resolve a video or URL."""
+from collections import deque
 from collections.abc import Mapping
 import re
 import urllib.parse
@@ -37,23 +38,47 @@ def channel_url(value=None, channel_id=None):
         return ""
 
 
+def thumbnail_candidate(value):
+    """Return a permitted HTTPS CDN URL and whether it was originally secure."""
+    if (not isinstance(value, str) or not value or len(value) > 4096 or "\\" in value
+            or any(character.isspace() or ord(character) < 32 for character in value)):
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        if (parsed.scheme not in ("https", "http") or parsed.username is not None
+                or parsed.password is not None or not parsed.hostname
+                or not parsed.hostname.endswith((".ytimg.com", ".ggpht.com", ".googleusercontent.com"))
+                or parsed.port not in (None, 443 if parsed.scheme == "https" else 80)):
+            return None
+    except ValueError:
+        return None
+    if parsed.scheme == "https":
+        return value, True
+    # Match ThumbnailCache's HTTPS CDN policy. Only known legacy CDN URLs can
+    # be upgraded; userinfo, unusual ports and arbitrary hosts never qualify.
+    return urllib.parse.urlunsplit(("https", parsed.hostname, parsed.path, parsed.query, parsed.fragment)), False
+
+
 def avatar_url(value):
     # Walk only the chosen avatar subtree, never arbitrary page/video thumbnails.
-    pending = [(value, 0)]
+    pending = deque([(value, 0)])
+    legacy = ""
     for _ in range(128):
         if not pending:
             break
-        item, depth = pending.pop(0)
+        item, depth = pending.popleft()
         if depth > 8:
             continue
         if isinstance(item, Mapping):
-            url = item.get("url")
-            if isinstance(url, str) and url.startswith("https://") and len(url) <= 4096:
-                return url
+            candidate = thumbnail_candidate(item.get("url"))
+            if candidate is not None:
+                if candidate[1]:
+                    return candidate[0]
+                legacy = legacy or candidate[0]
             pending.extend((v, depth + 1) for v in list(item.values())[:16] if isinstance(v, (Mapping, list)))
         elif isinstance(item, list):
             pending.extend((v, depth + 1) for v in item[:16])
-    return ""
+    return legacy
 
 
 def renderer_channel(renderer):

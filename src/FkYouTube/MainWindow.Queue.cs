@@ -21,12 +21,25 @@ public partial class MainWindow
     private bool _commentsRequested,_relatedRequested;
     private int _nextPageAttempts;
     private readonly List<VideoItem> _playbackTrail=[];
+    private int _playbackTrailRevision;
     private CancellationTokenSource? _authenticationSkipCts;
     private Task _authenticationSkipTask=Task.CompletedTask;
     private int _authenticationNoticeGeneration=-1;
     private TaskCompletionSource _playbackQueueChanged=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _autoplayIntentRevision;
     private const int MaxPreparedCaptionRequests=3;
+
+    private VideoItem ReplaceCurrentMetadata(VideoItem updated)
+    {
+        var previous=_current;
+        _current=updated;
+        // Metadata versions belong to one exact occurrence, even when the
+        // feed deliberately contains several records for the same video ID.
+        for(var index=0;index<_items.Count;index++)if(ReferenceEquals(_items[index],previous))_items[index]=updated;
+        foreach(var row in _rows)for(var index=0;index<row.Items.Count;index++)if(ReferenceEquals(row.Items[index],previous))row.Items[index]=updated;
+        for(var index=0;index<_playbackTrail.Count;index++)if(ReferenceEquals(_playbackTrail[index],previous))_playbackTrail[index]=updated;
+        return updated;
+    }
 
     private void NotifyPlaybackQueueChanged()
     {
@@ -54,13 +67,21 @@ public partial class MainWindow
         if(_closing || _ratingsAccountBusy || _current is null || PlayerPanel.Visibility!=Visibility.Visible ||
             _authenticationNoticeGeneration==_videoGeneration)return;
         _authenticationNoticeGeneration=_videoGeneration;
+        if(IsLivePlayback)
+        {
+            CancelLiveRecovery();
+            ShowAuthenticationNotice(()=>UiText.T("인증이 완료된 쿠키가 필요합니다. 라이브 재연결을 중단했습니다. 일반 모드에서 인증된 계정을 연결하세요.",
+                "Authenticated cookies are required. Live reconnection stopped. Connect an authenticated account in normal mode.",
+                "認証済みの Cookie が必要です。ライブの再接続を停止しました。通常モードで認証済みアカウントを接続してください。"),false);
+            return;
+        }
         if(_settings.AutoPlayNext)StartAuthenticationSkip();
         else ShowAuthenticationNotice(()=>UiText.T("인증이 완료된 쿠키가 필요합니다. 일반 모드에서 인증된 계정을 연결하세요. 자동재생은 꺼져 있습니다.","Authenticated cookies are required. Connect an authenticated account in normal mode. Autoplay is off.","認証済みの Cookie が必要です。通常モードで認証済みのアカウントを接続してください。自動再生はオフです。"),false);
     }
 
     private void StartAuthenticationSkip()
     {
-        if(_closing || _ratingsAccountBusy || !_settings.AutoPlayNext || _current is null ||
+        if(IsLivePlayback || _closing || _ratingsAccountBusy || !_settings.AutoPlayNext || _current is null ||
             _authenticationNoticeGeneration!=_videoGeneration)return;
         _authenticationSkipCts?.Cancel();
         var cts=CancellationTokenSource.CreateLinkedTokenSource(_accountCts.Token);
@@ -70,7 +91,7 @@ public partial class MainWindow
 
     private async Task RunAuthenticationSkipAsync(int generation,int epoch,int view,string account,CancellationTokenSource cts)
     {
-        bool Current()=>!_closing && !_ratingsAccountBusy && !cts.IsCancellationRequested && _settings.AutoPlayNext &&
+        bool Current()=>!IsLivePlayback && !_closing && !_ratingsAccountBusy && !cts.IsCancellationRequested && _settings.AutoPlayNext &&
             generation==_videoGeneration && epoch==_autoplayEpoch && view==_viewGeneration && account==RatingAccountStamp &&
             _authenticationNoticeGeneration==generation && PlayerPanel.Visibility==Visibility.Visible;
         try
@@ -95,6 +116,7 @@ public partial class MainWindow
 
     private async void NextVideo_Click(object sender,RoutedEventArgs e)
     {
+        CancelLiveRecovery();
         CancelAuthenticationSkip(clearNotice:true);
         if(_current!=null && !_closing)await AutoPlayNextAsync(_videoGeneration,_autoplayEpoch,true);
     }
@@ -115,11 +137,13 @@ public partial class MainWindow
     {
         if(_closing || PreviousVideo() is not {} previous)return;
         _autoplayIntentRevision++;NotifyPlaybackQueueChanged();
-        var trail=_playbackTrail.ToArray();
+        var trailRevision=_playbackTrailRevision;var trailCount=_playbackTrail.Count;
         var trailIndex=_playbackTrail.FindLastIndex(v=>ReferenceEquals(v,previous));
         var accepted=await PlayVideoAsync(previous,explicitStart:0,rememberHistory:false);
-        if(accepted && trailIndex>=0 && _playbackTrail.Count==trail.Length && _playbackTrail.Zip(trail).All(pair=>ReferenceEquals(pair.First,pair.Second)))
-            _playbackTrail.RemoveRange(trailIndex,_playbackTrail.Count-trailIndex);
+        // Metadata may replace references while the accepted load is awaited.
+        // Only structural history edits invalidate this navigation's boundary.
+        if(accepted && trailIndex>=0 && _playbackTrailRevision==trailRevision && _playbackTrail.Count==trailCount)
+        {_playbackTrail.RemoveRange(trailIndex,_playbackTrail.Count-trailIndex);_playbackTrailRevision++;}
         UpdateSkipButtons();
     }
     private void UpdateSkipButtons()
@@ -203,11 +227,8 @@ public partial class MainWindow
             if(result.Channel is {} owner && YouTubeService.TryChannelUrl(owner.Url,out var channelUrl))
             {
                 var previous=_current;
-                _current=previous with{Channel=string.IsNullOrWhiteSpace(owner.Title)?previous.Channel:owner.Title,
-                    ChannelId=string.IsNullOrWhiteSpace(owner.Id)?previous.ChannelId:owner.Id,ChannelUrl=channelUrl,ChannelThumbnail=owner.Thumbnail??previous.ChannelThumbnail};
-                // Preserve the exact playlist occurrence, including deliberate duplicate videos.
-                for(var index=0;index<_items.Count;index++)if(ReferenceEquals(_items[index],previous))_items[index]=_current;
-                foreach(var row in _rows)for(var index=0;index<row.Items.Count;index++)if(ReferenceEquals(row.Items[index],previous))row.Items[index]=_current;
+                ReplaceCurrentMetadata(previous with{Channel=string.IsNullOrWhiteSpace(owner.Title)?previous.Channel:owner.Title,
+                    ChannelId=string.IsNullOrWhiteSpace(owner.Id)?previous.ChannelId:owner.Id,ChannelUrl=channelUrl,ChannelThumbnail=owner.Thumbnail??previous.ChannelThumbnail});
                 _lastSavedKey="";UpdatePlayingChannel(_current);
             }
             _relatedItems.Clear();var seen=new HashSet<string>();
@@ -257,15 +278,16 @@ public partial class MainWindow
 
     private async Task EnsurePrefetchAsync()
     {
-        if(AccountWorkBlocked || SubtitlePreferencePending || !_settings.AutoPlayNext || _videoCts!=null || _snapshot?.Loaded!=true || _snapshot.Duration<=0 || _snapshot.Duration-_snapshot.Position>60)return;
+        if(AccountWorkBlocked || _current?.LiveStatus=="is_live" || _snapshot?.IsLive==true || SubtitlePreferencePending || !_settings.AutoPlayNext || _videoCts!=null || _snapshot?.Loaded!=true || _snapshot.Duration<=0 || _snapshot.Duration-_snapshot.Position>60)return;
         var candidate=_upNext.FirstOrDefault();
-        if(candidate==null || ReferenceEquals(candidate,_prefetchAttempt))return;
+        if(candidate==null || candidate.LiveStatus is "is_live" or "is_upcoming" or "post_live" || ReferenceEquals(candidate,_prefetchAttempt))return;
         using var readLifetime=BeginAccountRead();
         _prefetchCts?.Cancel();using var cts=new CancellationTokenSource();_prefetchCts=cts;_prefetchAttempt=candidate;
         var generation=_videoGeneration;var mediaGeneration=_expectedMediaGeneration;var height=_settings.MaxHeight;
         var preferenceRevision=_subtitlePreferenceRevision;var language=_player.PreferredSubtitleLanguage;
         SetPrefetchUiText(()=>UiText.T("다음 영상 미리 준비 중…","Preparing the next video…","次の動画を準備中…"));
-        bool Current()=>!AccountWorkBlocked && !cts.IsCancellationRequested && generation==_videoGeneration &&
+        bool Current()=>!AccountWorkBlocked && _current?.LiveStatus!="is_live" && _snapshot?.IsLive!=true &&
+            !cts.IsCancellationRequested && generation==_videoGeneration &&
             mediaGeneration==_expectedMediaGeneration && preferenceRevision==_subtitlePreferenceRevision &&
             _settings.AutoPlayNext && ReferenceEquals(candidate,_upNext.FirstOrDefault());
         try

@@ -32,7 +32,7 @@ public sealed class FeedService : IAsyncDisposable
                 lock(_cleanupSync)
                 {
                     _lease=lease;lease=null;
-                    _process=OwnedProcess.Start(_paths.Python,["-u",_paths.FeedWorker],_paths.Root);
+                    _process=OwnedProcess.Start(_paths.Python,_paths.BuildPythonArguments(_paths.FeedWorker,unbuffered:true),_paths.Root);
                     _drain=DrainAsync(_process.StandardError);
                 }
                 open=true;

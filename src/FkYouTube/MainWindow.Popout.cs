@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -18,6 +19,7 @@ public partial class MainWindow
     private Slider? _popoutSeek;
     private TextBlock? _popoutTime;
     private Button? _popoutPause;
+    private Button? _popoutLiveEdge;
     private Button? _popoutPrevious,_popoutNext;
     private PlaybackControlsAutoHide? _popoutControlsAutoHide;
     private bool _popoutSeekDragging;
@@ -97,6 +99,10 @@ public partial class MainWindow
         var time = new TextBlock { Text = "0:00 / 0:00", VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 10, 0) };
         toolbar.Children.Add(time);
+        var liveEdge = PopoutButton("● LIVE");
+        liveEdge.Visibility = Visibility.Collapsed;
+        liveEdge.Click += LiveEdge_Click;
+        toolbar.Children.Add(liveEdge);
         var volumeLabel = new TextBlock { Text = UiText.T("음량","Volume","音量"), VerticalAlignment = VerticalAlignment.Center };
         toolbar.Children.Add(volumeLabel);
         var volume = new Slider { Minimum = 0, Maximum = 100, Width = 80, IsMoveToPointEnabled = true,
@@ -143,7 +149,8 @@ public partial class MainWindow
             _popoutControlsAutoHide?.Dispose(); _popoutControlsAutoHide = null;
             _refreshPopoutUiText = null;
             _popoutWindow = null; _popoutSurface = null; _popoutSeek = null;
-            _popoutTime = null; _popoutPause = null; _popoutPrevious=null;_popoutNext=null;_popoutSeekDragging = false;
+            _popoutTime = null; _popoutPause = null; _popoutLiveEdge = null; _popoutPrevious=null;_popoutNext=null;_popoutSeekDragging = false;
+            ApplyPlayerViewLayout();
             RefreshPopoutUiText();
             if (!_closing && !_popoutShutdown && !_popoutCloseWithoutActivation)
             {
@@ -153,7 +160,8 @@ public partial class MainWindow
             }
         };
         _popoutWindow = popup; _popoutSurface = surface; _popoutSeek = seek;
-        _popoutTime = time; _popoutPause = pause;
+        _popoutTime = time; _popoutPause = pause; _popoutLiveEdge = liveEdge;
+        ApplyPlayerViewLayout();
         _refreshPopoutUiText = () =>
         {
             if(_popoutPrevious is {} previous)previous.Content = UiText.T("⏮ 이전","⏮ Previous","⏮ 前へ");
@@ -161,12 +169,16 @@ public partial class MainWindow
             UpdatePauseControls();
             back.Content = UiText.T("−5초","−5 sec","−5秒");
             forward.Content = UiText.T("+5초","+5 sec","+5秒");
+            var liveLabel = UiText.T("실시간 지점으로 이동", "Go to live edge", "ライブ位置へ移動");
+            liveEdge.ToolTip = liveLabel;
+            AutomationProperties.SetName(liveEdge, liveLabel);
             volumeLabel.Text = UiText.T("음량","Volume","音量");
             share.Content = UiText.T("공유","Share","共有");
             share.ToolTip = UiText.T("영상 주소만 복사","Copy video URL only","動画 URL のみコピー");
             subtitles.Content = UiText.T("자막 ▾","Subtitles ▾","字幕 ▾");
             pin.Content = UiText.T("항상 위","Always on top","常に手前に表示");
             restore.Content = UiText.T("원래 창으로","Return to main window","元のウィンドウへ");
+            if (_snapshot is { } snapshot) UpdatePopoutSnapshot(snapshot);
         };
         RefreshPopoutUiText();
         _popoutControlsAutoHide = new PlaybackControlsAutoHide(popup, layout, tray, wakeZone,
@@ -276,14 +288,22 @@ public partial class MainWindow
     {
         if (_popoutWindow is null || _popoutSeek is null) return;
         if (_current is not null) _popoutWindow.Title = "FK_YT · " + _current.Title;
-        _popoutSeek.IsEnabled = snapshot.Loaded && snapshot.Duration > 0;
-        if (!_popoutSeekDragging && !_pendingSeek.HasValue)
+        var live = ConfigureLiveSeek(_popoutSeek, snapshot);
+        if (!live)
         {
-            _popoutSeek.Maximum = Math.Max(1, snapshot.Duration);
-            _popoutSeek.Value = Math.Clamp(snapshot.Position, 0, _popoutSeek.Maximum);
+            _popoutSeek.IsEnabled = snapshot.Loaded && snapshot.Duration > 0;
+            if (!_popoutSeekDragging && !_pendingSeek.HasValue)
+            {
+                _popoutSeek.Minimum = 0;
+                _popoutSeek.Maximum = Math.Max(1, snapshot.Duration);
+                _popoutSeek.Value = Math.Clamp(snapshot.Position, 0, _popoutSeek.Maximum);
+            }
         }
+        RefreshLiveControls(snapshot);
         if (_popoutTime is not null)
-            _popoutTime.Text = VideoItem.FormatTime(snapshot.Position) + " / " + VideoItem.FormatTime(snapshot.Duration);
+            _popoutTime.Text = live && ConfirmedLiveEndStatus(snapshot) is null
+                ? UiText.T("실시간", "LIVE", "ライブ") + " · " + VideoItem.FormatTime(snapshot.Position)
+                : VideoItem.FormatTime(snapshot.Position) + " / " + VideoItem.FormatTime(snapshot.Duration);
         UpdatePauseControls();
         UpdatePopoutSkipButtons();
     }
@@ -299,8 +319,8 @@ public partial class MainWindow
         switch (e.Key)
         {
             case Key.Space: e.Handled = true; await TogglePlaybackPauseAsync(); break;
-            case Key.Left: e.Handled = true; await PlayerCommandAsync("seek", -5, "relative"); break;
-            case Key.Right: e.Handled = true; await PlayerCommandAsync("seek", 5, "relative"); break;
+            case Key.Left: e.Handled = true; await SeekRelativeAsync(-5); break;
+            case Key.Right: e.Handled = true; await SeekRelativeAsync(5); break;
             case Key.Up: e.Handled = true; VolumeSlider.Value = Math.Min(100, VolumeSlider.Value + 5); break;
             case Key.Down: e.Handled = true; VolumeSlider.Value = Math.Max(0, VolumeSlider.Value - 5); break;
             case Key.Escape: e.Handled = true; _popoutWindow?.Close(); break;
@@ -341,7 +361,9 @@ public partial class MainWindow
     {
         _popoutSeekDragging = false;
         if (!_playerStarted || _snapshot?.Loaded != true || _popoutSeek is null) return;
-        var target = Math.Clamp(_popoutSeek.Value, 0, _popoutSeek.Maximum);
+        var clamped = ClampPlaybackSeek(_popoutSeek.Value);
+        if (clamped is not { } target) return;
+        if (IsLivePlayback) { await SeekLiveAsync(target); return; }
         _pendingSeek = target; _pendingSeekAt = _clock.Elapsed.TotalSeconds;
         await PlayerCommandAsync("seek", target, "absolute+exact");
     }

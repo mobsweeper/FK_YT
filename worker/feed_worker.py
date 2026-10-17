@@ -18,7 +18,7 @@ from recommendation_actions import (ACTIONS, RecommendationError, extract_feedba
 from youtube_session import (DiscardOutput, SessionError, create_youtube_dl, selected_ydl_options,
                              validate_account_context)
 from shorts_feed import ShortsFeed, ShortsFeedError
-from channel_metadata import channel_url, enrich_entry
+from channel_metadata import channel_url, enrich_entry, thumbnail_candidate as _thumbnail_candidate
 
 
 MAX_BATCH = 90
@@ -27,6 +27,7 @@ MAX_LINE = 65536
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 VIDEO_MIX_ID = re.compile(r"^RD([A-Za-z0-9_-]{11})$")
 CHANNEL_TABS = frozenset(("videos", "shorts", "streams", "playlists"))
+LIVE_STATUSES = frozenset(("not_live", "is_live", "is_upcoming", "post_live", "was_live", "unknown"))
 FEED_URLS = {
     "home": "https://www.youtube.com/feed/recommended",
     "shorts": "https://www.youtube.com/shorts",
@@ -192,26 +193,6 @@ def text_or_empty(value, limit=4096):
     return value[:limit] if isinstance(value, str) else ""
 
 
-def _thumbnail_candidate(value):
-    if (not isinstance(value, str) or not value or len(value) > 4096 or "\\" in value
-            or any(character.isspace() or ord(character) < 32 for character in value)):
-        return None
-    try:
-        parsed = urllib.parse.urlsplit(value)
-        if (parsed.scheme not in ("https", "http") or parsed.username is not None
-                or parsed.password is not None or not parsed.hostname
-                or not parsed.hostname.endswith((".ytimg.com", ".ggpht.com", ".googleusercontent.com"))
-                or parsed.port not in (None, 443 if parsed.scheme == "https" else 80)):
-            return None
-    except ValueError:
-        return None
-    if parsed.scheme == "https":
-        return value, True
-    # Match ThumbnailCache's HTTPS CDN policy. Only known legacy CDN URLs can
-    # be upgraded; userinfo, unusual ports and arbitrary hosts never qualify.
-    return urllib.parse.urlunsplit(("https", parsed.hostname, parsed.path, parsed.query, parsed.fragment)), False
-
-
 def thumbnail_url(entry) -> str:
     direct = _thumbnail_candidate(entry.get("thumbnail"))
     if direct is not None and direct[1]:
@@ -285,6 +266,10 @@ def normalize_entry(entry):
         url = "https://www.youtube.com/watch?v=" + item_id
     else:
         return None
+    live_status = entry.get("live_status")
+    if kind != "video" or not isinstance(live_status, str) or live_status not in LIVE_STATUSES:
+        live_status = "unknown"
+    channel_thumbnail = _thumbnail_candidate(entry.get("channel_thumbnail"))
     return {
         "id": item_id,
         "title": text_or_empty(entry.get("title"), 2048),
@@ -292,11 +277,12 @@ def normalize_entry(entry):
         "channel": text_or_empty(entry.get("channel") or entry.get("uploader"), 512),
         "channelId": channel_id,
         "channelUrl": channel_url(entry.get("channel_url") or entry.get("uploader_url"), channel_id),
-        "channelThumbnail": text_or_empty(entry.get("channel_thumbnail")),
+        "channelThumbnail": channel_thumbnail[0] if channel_thumbnail else "",
         "thumbnail": thumbnail_url(entry),
         "duration": number_or_none(entry.get("duration")),
         "viewCount": number_or_none(entry.get("view_count"), integer=True),
         "kind": kind,
+        "liveStatus": live_status,
         # The pinned YouTubeTab extractor resolves both old and new members
         # badge styles into this field while leaving public/unknown items alone.
         "membersOnly": kind == "video" and entry.get("availability") == "subscriber_only",
