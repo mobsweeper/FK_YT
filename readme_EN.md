@@ -1,6 +1,6 @@
 # FK_YT 1.1
 
-**[한국어 안내](https://github.com/mobsweeper/FK_YT#korean)** · [English](https://github.com/mobsweeper/FK_YT#english)
+**[한국어 안내](readme_KR.md)** · [English](README.md)
 
 A personal YouTube viewer for Windows. Lists and a player, without keeping the YouTube webpage running.
 
@@ -22,7 +22,7 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 ## 1. Language
 
-[English](https://github.com/mobsweeper/FK_YT#english) · [한국어](https://github.com/mobsweeper/FK_YT#korean)
+[English](README.md) · [한국어](readme_KR.md)
 
 The app interface supports English, Korean, and Japanese. Changing the interface language does not change your YouTube account's region.
 

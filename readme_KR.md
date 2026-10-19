@@ -1,6 +1,6 @@
 # FK_YT 1.1
 
-**[English guide](https://github.com/mobsweeper/FK_YT#english)** · [한국어](https://github.com/mobsweeper/FK_YT#korean)
+**[English guide](README.md)** · [한국어](readme_KR.md)
 
 Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레이어만 띄웁니다.
 
@@ -22,7 +22,7 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 ## 1. 언어 선택
 
-[한국어](https://github.com/mobsweeper/FK_YT#korean) · [English](https://github.com/mobsweeper/FK_YT#english)
+[한국어](readme_KR.md) · [English](README.md)
 
 앱 UI는 한국어·영어·일본어를 지원합니다. UI 언어를 바꿔도 YouTube 계정의 지역 설정은 바뀌지 않습니다.
 
