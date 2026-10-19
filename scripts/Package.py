@@ -1,6 +1,6 @@
-"""Assemble FK_YT 1.1.1 portable from the pinned 1.0 ZIP and a normal publish.
+"""Assemble FK_YT 1.1.2 portable from the pinned 1.0 ZIP and a normal publish.
 
-Only the four application files, eleven production workers, public 1.1.1 documents,
+Only the four application files, eleven production workers, public 1.1.2 documents,
 and two generated metadata files may change. All other base payload bytes remain
 unchanged. This recipe never builds, launches, downloads, or publishes anything.
 Run with Python 3.10 or newer; the output parent directory must already exist.
@@ -19,7 +19,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 BASE_SHA256 = "05fd94e0901e22903db33d3bc4ee9f57bfb0509b93fb5010ef1aa6ad5df25d72"
 SOURCE_ASSETS = [
     {"name": "FK_YT_yt-dlp.zip", "bytes": 165234763,
@@ -37,14 +37,14 @@ WORKER_NAMES = (
     "related_feed.py", "home_feed.py", "channel_feed.py", "channel_metadata.py",
 )
 DOCUMENTS = {
-    "docs/FEATURES-1.1.1.md": "FEATURES-1.1.1.md",
-    "docs/guides/사용설명서-1.1.1.txt": "사용설명서-1.1.1.txt",
-    "docs/guides/User-guide-1.1.1.txt": "User-guide-1.1.1.txt",
-    "docs/guides/ご利用ガイド-1.1.1.txt": "ご利用ガイド-1.1.1.txt",
+    "docs/FEATURES-1.1.2.md": "FEATURES-1.1.2.md",
+    "docs/guides/사용설명서-1.1.2.txt": "사용설명서-1.1.2.txt",
+    "docs/guides/User-guide-1.1.2.txt": "User-guide-1.1.2.txt",
+    "docs/guides/ご利用ガイド-1.1.2.txt": "ご利用ガイド-1.1.2.txt",
     "license.md": "license.md",
-    "docs/RELEASE-1.1.1.md": "RELEASE-1.1.1.md",
-    "docs/LICENSING-1.1.1.md": "LICENSING-1.1.1.md",
-    "docs/SOURCE-ACCESS-1.1.1.txt": "SOURCE-ACCESS-1.1.1.txt",
+    "docs/RELEASE-1.1.2.md": "RELEASE-1.1.2.md",
+    "docs/LICENSING-1.1.2.md": "LICENSING-1.1.2.md",
+    "docs/SOURCE-ACCESS-1.1.2.txt": "SOURCE-ACCESS-1.1.2.txt",
     "docs/LICENSES-SUPPLEMENT-1.1.txt": "LICENSES-SUPPLEMENT-1.1.txt",
 }
 GENERATED = {"file-manifest.json", "distribution-provenance.json"}
@@ -355,7 +355,10 @@ def add(archive: zipfile.ZipFile, name: str, data: bytes) -> None:
     archive.writestr(info, data)
 
 
-def package(base: Path, publish: Path, output: Path, source_root: Path, app_source: Path) -> dict:
+def package(base: Path, publish: Path, output: Path, source_root: Path, app_source: Path, candidate_label: str | None = None) -> dict:
+    if candidate_label is not None and (not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?", candidate_label) or ".." in candidate_label):
+        raise PackageError("Candidate label must be 1-64 lowercase letters, digits, dots or hyphens, start and end with a letter or digit, and contain no consecutive dots")
+    replacement_allowlist = REPLACEMENT_ALLOWLIST | ({"CANDIDATE-NOTES.txt"} if candidate_label else set())
     base = checked_path(base, file=True)
     publish = checked_path(publish, directory=True)
     source_root = checked_path(source_root, directory=True)
@@ -365,8 +368,9 @@ def package(base: Path, publish: Path, output: Path, source_root: Path, app_sour
         raise PackageError("Output must be a new .zip file")
     if file_sha(base) != BASE_SHA256:
         raise PackageError("Base must be the unmodified public 1.0 portable ZIP (SHA-256 pin mismatch)")
-    if app_source.name != "FK_YT-1.1.1-source.zip":
-        raise PackageError("Matching public source archive must be named FK_YT-1.1.1-source.zip")
+    expected_source_name = "FK_YT-" + (candidate_label or VERSION) + "-source.zip"
+    if app_source.name != expected_source_name:
+        raise PackageError("Matching source archive must be named " + expected_source_name)
     source_archive = {"path": app_source.name, "length": app_source.stat().st_size, "sha256": file_sha(app_source)}
     if any(item.name.lower().endswith(".pdb") for item in publish.iterdir()):
         raise PackageError("Normal publish input must not include PDB files")
@@ -377,6 +381,23 @@ def package(base: Path, publish: Path, output: Path, source_root: Path, app_sour
     overlays.update({"worker/" + name: read_source(source_root, "worker/" + name, snapshots) for name in WORKER_NAMES})
     overlays.update({target: read_source(source_root, source, snapshots) for source, target in DOCUMENTS.items()})
     check_source_archive(app_source, snapshots)
+    if candidate_label:
+        overlays["CANDIDATE-NOTES.txt"] = (
+            "FK_YT test portable: " + candidate_label + "\n"
+            "Unreleased candidate; application version remains " + VERSION + ".\n"
+            "This is not the published " + VERSION + " binary.\n\n"
+            "Matching FK_YT source: " + source_archive["path"] + "\n"
+            "Source SHA-256: " + source_archive["sha256"] + "\n"
+            "Source bytes: " + str(source_archive["length"]) + "\n"
+            "Obtain this source ZIP alongside this candidate portable.\n"
+            "It is not the source ZIP linked by the historical release documents.\n\n"
+            "External runtime, license and copyright bytes are unchanged from the pinned base.\n"
+            "Their corresponding-source guidance remains in SOURCE-ACCESS-1.1.2.txt and notices/.\n"
+            "Earlier feature/release guides are retained as historical documentation; their\n"
+            "verification claims do not establish this candidate's behavior. Consult the\n"
+            "separate candidate verification report for checks actually performed.\n\n"
+            "Portable data is stored in adjacent data/. No user data or test scripts are included.\n"
+        ).encode("utf-8")
     with zipfile.ZipFile(base) as previous:
         inventory, before = verified_archive(previous)
         prior = json.loads(previous.read(PREFIX + "distribution-provenance.json"))
@@ -392,19 +413,21 @@ def package(base: Path, publish: Path, output: Path, source_root: Path, app_sour
         if {name for name in before if name.startswith("worker/") and name.endswith(".py")} - {"worker/" + name for name in WORKER_NAMES}:
             raise PackageError("Unexpected production worker in base")
         provenance = {
-            "schema": 1, "product": "FK_YT", "version": "1.1.1", "applicationVersion": VERSION,
-            "packageRole": "normal portable", "basePortable": {"version": "1.0", "sha256": BASE_SHA256},
+            "schema": 1, "product": "FK_YT", "version": "1.1.2", "applicationVersion": VERSION,
+            "packageRole": "unreleased test portable" if candidate_label else "normal portable", "basePortable": {"version": "1.0", "sha256": BASE_SHA256},
             "applicationSource": source_archive,
             "selectedSourceInputs": {"root": "FK_YT", "version": VERSION, "files": sorted(snapshots.values(), key=lambda item: item["path"])},
             "sourceAssets": SOURCE_ASSETS, "historicalBaseSourceAssets": vendor_sources,
-            "sourceAccess": "SOURCE-ACCESS-1.1.1.txt",
+            "sourceAccess": "CANDIDATE-NOTES.txt" if candidate_label else "SOURCE-ACCESS-1.1.2.txt",
             "runtimeChanges": prior.get("runtimeChanges", {}),
             "fileManifest": "file-manifest.json", "appDllSha256": digest(overlays["FK_YT.dll"]),
             "applicationFiles": sorted(app_snapshot.values(), key=lambda item: item["path"]),
-            "replacementAllowlist": sorted(REPLACEMENT_ALLOWLIST),
+            "replacementAllowlist": sorted(replacement_allowlist),
             "externalRuntimeAndOriginalLicenseBytes": "Every base file outside the replacement allowlist is preserved byte for byte, including external runtimes, original guides, licenses, notices and corresponding-source notices.",
             "verificationScope": "Package integrity, pinned base, selected source inputs, app/dependency versions, self-contained framework configuration and byte preservation. Build/source equivalence, diagnostic-code inspection and runtime behavior require separate release verification.",
         }
+        if candidate_label:
+            provenance["candidateLabel"] = candidate_label
         overlays["distribution-provenance.json"] = encode(provenance)
         reject_private_paths(overlays, [source_root, publish, base, app_source])
         names = set(before) | set(overlays) | {"file-manifest.json"}
@@ -426,11 +449,11 @@ def package(base: Path, publish: Path, output: Path, source_root: Path, app_sour
         _, after = verified_archive(archive)
     if after != expected:
         raise PackageError("Output ZIP does not match the exact input vector")
-    protected = set(before) - REPLACEMENT_ALLOWLIST
+    protected = set(before) - replacement_allowlist
     if set(before) - set(after) or any(before[name] != after[name] for name in protected):
         raise PackageError("Protected original payload bytes changed or disappeared")
     changed = sorted(name for name in set(before) | set(after) if before.get(name) != after.get(name))
-    if not set(changed) <= REPLACEMENT_ALLOWLIST:
+    if not set(changed) <= replacement_allowlist:
         raise PackageError("Unexpected output payload change")
     for name, expected_source in snapshots.items():
         if record(name, checked_path(source_root.joinpath(*safe_parts(name)), file=True).read_bytes()) != expected_source:
@@ -450,11 +473,12 @@ def main() -> int:
     parser.add_argument("--base", type=Path, required=True, help="Unmodified public 1.0 portable ZIP")
     parser.add_argument("--publish", type=Path, required=True, help="Normal Release win-x64 publish directory")
     parser.add_argument("--output", type=Path, required=True, help="New portable ZIP; existing outputs are refused")
-    parser.add_argument("--app-source", type=Path, required=True, help="Matching FK_YT-1.1.1-source.zip, created before this portable ZIP")
+    parser.add_argument("--app-source", type=Path, required=True, help="Matching FK_YT-1.1.2-source.zip, created before this portable ZIP")
+    parser.add_argument("--candidate-label", help="Optional unreleased candidate identity; matching source is FK_YT-<label>-source.zip")
     parser.add_argument("--source-root", type=Path, default=Path(__file__).absolute().parent.parent, help="Public source root (default: parent of scripts)")
     args = parser.parse_args()
     try:
-        print(json.dumps(package(args.base, args.publish, args.output, args.source_root, args.app_source), ensure_ascii=True))
+        print(json.dumps(package(args.base, args.publish, args.output, args.source_root, args.app_source, args.candidate_label), ensure_ascii=True))
     except (PackageError, OSError, ValueError, KeyError, TypeError, struct.error, ET.ParseError, zipfile.BadZipFile) as error:
         print("Packaging failed: " + str(error), file=sys.stderr)
         return 1

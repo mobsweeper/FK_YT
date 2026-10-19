@@ -16,6 +16,7 @@ public partial class MainWindow
     private CancellationTokenSource? _relatedCts,_prefetchCts,_captionCts;
     private Task _relatedTask=Task.CompletedTask;
     private VideoItem? _prefetchAttempt,_preparedItem;
+    private bool _prefetchAudioOnly,_preparedAudioOnly;
     private IReadOnlyList<int> _preparedResolutions=[];
     private IReadOnlyList<PreparedCaption> _preparedCaptions=[];
     private bool _commentsRequested,_relatedRequested;
@@ -258,7 +259,7 @@ public partial class MainWindow
         RefreshQueueUiText();
         if(items.Count==0 && fromFeed && _hasFeed && _hasMore && !_loading && _nextPageAttempts<4)
         {_nextPageAttempts++;_=FetchBatchAsync(false);}
-        if(_videoCts==null && !ReferenceEquals(_prefetchAttempt,_upNext.FirstOrDefault()))
+        if(_videoCts==null && (!ReferenceEquals(_prefetchAttempt,_upNext.FirstOrDefault()) || _prefetchAudioOnly!=_settings.AudioOnly))
         {
             _prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;_preparedResolutions=[];_preparedCaptions=[];SetPrefetchUiText(()=>"");
             if(_playerStarted)_=ClearPrefetchSafelyAsync();
@@ -280,24 +281,26 @@ public partial class MainWindow
     {
         if(AccountWorkBlocked || _current?.LiveStatus=="is_live" || _snapshot?.IsLive==true || SubtitlePreferencePending || !_settings.AutoPlayNext || _videoCts!=null || _snapshot?.Loaded!=true || _snapshot.Duration<=0 || _snapshot.Duration-_snapshot.Position>60)return;
         var candidate=_upNext.FirstOrDefault();
-        if(candidate==null || candidate.LiveStatus is "is_live" or "is_upcoming" or "post_live" || ReferenceEquals(candidate,_prefetchAttempt))return;
+        if(candidate==null || candidate.LiveStatus is "is_live" or "is_upcoming" or "post_live" ||
+            ReferenceEquals(candidate,_prefetchAttempt) && _prefetchAudioOnly==_settings.AudioOnly)return;
         using var readLifetime=BeginAccountRead();
         _prefetchCts?.Cancel();using var cts=new CancellationTokenSource();_prefetchCts=cts;_prefetchAttempt=candidate;
         var generation=_videoGeneration;var mediaGeneration=_expectedMediaGeneration;var height=_settings.MaxHeight;
+        var audioOnly=_settings.AudioOnly;_prefetchAudioOnly=audioOnly;
         var preferenceRevision=_subtitlePreferenceRevision;var language=_player.PreferredSubtitleLanguage;
         SetPrefetchUiText(()=>UiText.T("다음 영상 미리 준비 중…","Preparing the next video…","次の動画を準備中…"));
         bool Current()=>!AccountWorkBlocked && _current?.LiveStatus!="is_live" && _snapshot?.IsLive!=true &&
             !cts.IsCancellationRequested && generation==_videoGeneration &&
-            mediaGeneration==_expectedMediaGeneration && preferenceRevision==_subtitlePreferenceRevision &&
+            mediaGeneration==_expectedMediaGeneration && preferenceRevision==_subtitlePreferenceRevision && audioOnly==_settings.AudioOnly &&
             _settings.AutoPlayNext && ReferenceEquals(candidate,_upNext.FirstOrDefault());
         try
         {
-            var prepared=await _youtube.ResolveNextAsync(candidate.Url,height,cts.Token,_settings.Incognito,language);
+            var prepared=await _youtube.ResolveNextAsync(candidate.Url,height,cts.Token,_settings.Incognito,language,audioOnly);
             if(!Current())return;
-            var ready=await _player.PrepareNextAsync(candidate.Url,prepared.MediaUrl,mediaGeneration,height,prepared.Headers,cts.Token,prepared.HttpChunkSize);
+            var ready=await _player.PrepareNextAsync(candidate.Url,prepared.MediaUrl,mediaGeneration,height,prepared.Headers,cts.Token,prepared.HttpChunkSize,audioOnly);
             if(Current())
             {
-                if(ready){_preparedItem=candidate;_preparedResolutions=prepared.Resolutions;_preparedCaptions=prepared.Captions;SetPrefetchUiText(()=>UiText.T("다음 영상 준비됨 · 영상 끝부분에서 미리 버퍼링","Next video ready · Buffering near the end of this video","次の動画の準備完了 · この動画の終わり頃に先行バッファリング"));}
+                if(ready){_preparedItem=candidate;_preparedAudioOnly=audioOnly;_preparedResolutions=prepared.Resolutions;_preparedCaptions=audioOnly?[]:prepared.Captions;SetPrefetchUiText(()=>UiText.T("다음 영상 준비됨 · 영상 끝부분에서 미리 버퍼링","Next video ready · Buffering near the end of this video","次の動画の準備完了 · この動画の終わり頃に先行バッファリング"));}
                 else SetPrefetchUiText(()=>UiText.T("다음 영상은 일반 방식으로 이어 재생합니다.","The next video will continue with normal playback.","次の動画は通常の方法で続けて再生します。"));
             }
         }
@@ -313,14 +316,14 @@ public partial class MainWindow
     }
     private async Task LoadPreparedCaptionsAsync(IReadOnlyList<PreparedCaption> captions,int generation)
     {
-        if(generation!=_videoGeneration || AccountWorkBlocked || SubtitlePreferencePending || _player.SubtitlesOff)return;
+        if(generation!=_videoGeneration || AccountWorkBlocked || _activeAudioOnly || SubtitlePreferencePending || _player.SubtitlesOff)return;
         _subtitleLoadError=null;_subtitleLoadErrorUiText=null;
         _captionCts?.Cancel();using var cts=CancellationTokenSource.CreateLinkedTokenSource(_accountCts.Token);_captionCts=cts;
         var ct=cts.Token;var mediaGeneration=_expectedMediaGeneration;var selectionRevision=_subtitleSelectionRevision;
         var preferred=_player.PreferredSubtitleLanguage;
         bool Current()=>!AccountWorkBlocked && !ct.IsCancellationRequested && ReferenceEquals(_captionCts,cts) &&
             selectionRevision==_subtitleSelectionRevision && !SubtitlePreferencePending &&
-            generation==_videoGeneration && mediaGeneration==_expectedMediaGeneration && _player.Snapshot.MediaGeneration==mediaGeneration;
+            !_activeAudioOnly && generation==_videoGeneration && mediaGeneration==_expectedMediaGeneration && _player.Snapshot.MediaGeneration==mediaGeneration;
         try
         {
             var tracks=await _player.GetPropertyAsync<JsonElement>("track-list",ct);

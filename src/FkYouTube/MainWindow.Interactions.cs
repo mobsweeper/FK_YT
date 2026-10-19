@@ -58,6 +58,7 @@ public partial class MainWindow
         if (_ratingUiText is {} ratingText) RatingState.Text = ratingText();
         if (_dislikeStatsUiText is {} statsText) DislikeStatsState.Text = statsText();
         if (_subtitleToolTipText is {} subtitleText) SubtitleButton.ToolTip = subtitleText();
+        RefreshAudioPlaybackUi();
         if (_authenticationUiText is {} authenticationText) AuthenticationNoticeText.Text = authenticationText();
         if (_subtitleLoadError is not null && _subtitleLoadErrorUiText is {} errorText) _subtitleLoadError = errorText();
         foreach (var refresh in _subtitleTextRefresh.ToArray()) refresh();
@@ -224,7 +225,7 @@ public partial class MainWindow
 
     private async void Subtitles_Click(object sender, RoutedEventArgs e)
     {
-        if (_closing || _ratingsAccountBusy || !_playerStarted || _current is null || sender is not Button anchor) return;
+        if (_closing || _ratingsAccountBusy || _activeAudioOnly || !_playerStarted || _current is null || sender is not Button anchor) return;
         await TrackSubtitleTaskAsync(OpenSubtitleMenuAsync(anchor));
     }
 

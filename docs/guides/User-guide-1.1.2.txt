@@ -1,0 +1,38 @@
+FK_YT 1.1.2 user guide
+Updated 2026-10-19
+
+1. Start and preserve data
+
+Portable: extract all of FK_YT-1.1.2-portable.zip into a new writable folder, then run FK_YT/FK_YT.exe. Portable data is stored beside the app in data/. Installer: run FK_YT-1.1.2-Setup-x64.exe as administrator, follow the English Setup pages, close Setup and open FK_YT (System) from Start Menu. Installed data is stored in each Windows user's %LOCALAPPDATA%\FK_YT\data. Keep runtime, worker, DLLs, legal notices and the installed-mode marker together. Check https://github.com/mobsweeper/FK_YT/releases/tag/v1.1.2 for file availability and final checksums.
+
+Close the app before backing up or moving data. Keep the original database and settings together; copy only into an empty destination as the same Windows user. Do not merge SQLite databases or overwrite a folder in use. Removing data/ deletes that copy's app data.
+
+2. Audio mode checkbox
+
+Select Audio mode in the sidebar for sound playback of ordinary videos. The choice applies to the next video or when you leave the playback screen and reopen it; the current playback does not switch immediately. Live broadcasts continue with video and audio.
+
+When the extractor marks an available original track with language_preference=10, the app prefers the original separate audio stream, then the lowest-resolution available original stream containing both video and audio. An original combined stream takes priority over a dubbed separate stream or a lower-resolution dubbed combined stream. If there is no original-track marker, the app does not guess the language: it keeps the compatibility selection of a separate audio stream, then the lowest-resolution available combined stream. It cannot guarantee that every dubbed track is blocked.
+
+Combined-stream fallback disables the video track and plays the sound, but still downloads video data, so it does not guarantee audio-only traffic or a fixed bandwidth saving. The selected account is preserved. Quality and subtitle controls are unavailable during audio playback.
+
+3. Live beginning, LIVE and recovery
+
+Live-from-start playback uses app-owned native yt-dlp fragment workers and pipes to open the beginning still available from YouTube. It cannot recover expired DVR segments or guarantee the original start. If the beginning is unavailable, use LIVE for the current edge. LIVE preserves an intentional pause. Rewind uses only confirmed local buffer ranges, which can have gaps.
+
+The live backward compressed-packet cache budget is 6 GiB, growing as data arrives. It is not preallocated, an RSS limit, a whole-app RAM cap or a guaranteed rewind duration. The forward budget stays 32 MiB. mpv disk caching is disabled; temporary fragment staging is separate. Explicit downloads remain on disk.
+
+After checking the broadcast and error, automatic recovery can reload at most three times with 2/5/10-second delays. A final status probe after the limit does not start a fourth automatic load. Authentication, access and rate-limit errors stop recovery. Manual pause, stop, video/account changes and incognito changes cancel it. The app advances automatically only after confirming broadcast end. Use LIVE for a manual retry. Live chat, scheduled-stream waiting and recording are not included.
+
+4. History, privacy and tools
+
+YouTube history sending remains off by default. Turn on Send watch history to my YouTube account in Settings if wanted. Local history/resume positions are separate, and enabling does not send older local history. Held records need Resume held records after checking the account/channel and reason; Failed and Unconfirmed attempts are not automatically resent. Sent acknowledges a request, not confirmed appearance in YouTube history.
+
+Incognito blocks sending and local history/resume saving without changing the saved preference. It does not hide your IP or delete deliberate downloads. Do not attach cookies, tokens, data/ or personal backups to reports.
+
+Manual experimental yt-dlp/Deno updates apply on the next app start; Python, mpv and FFmpeg are not updated. Completed old versions remain without automatic cleanup or a total storage cap. Redistributing a later tool version requires that version's notices and sources.
+
+5. Source, licensing and verification
+
+The common application source is FK_YT-1.1.2-source.zip; the installer implementation and input locks are in FK_YT-1.1.2-installer-source.zip. Their download location and final SHA-256 list are on the same v1.1.2 release page. SOURCE-ACCESS-1.1.2.txt maps the three unchanged external source ZIPs to this release. FK_YT-owned code/documents use MIT; original external licenses and notices remain applicable.
+
+The release body records checks actually performed on the final files. A build, metadata/fixture check or archive-integrity check does not establish actual playback or audible language. The cause of an earlier intermittent immediate exit remains unconfirmed. A new interactive 1.1.2 UAC installation/update/removal run is not claimed here. Historical guides and verification results apply to their own versions. See FEATURES-1.1.2.md, RELEASE-1.1.2.md and LICENSING-1.1.2.md for limits.

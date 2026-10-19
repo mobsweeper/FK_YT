@@ -3,6 +3,8 @@ namespace FkYouTube.Playback;
 public sealed record PlaybackSnapshot
 {
     public long MediaGeneration { get; init; }
+    // Orders actual state changes across the player's entire lifetime.
+    public long Revision { get; init; }
     public string? VideoUrl { get; init; }
     public double Position { get; init; }
     public double Duration { get; init; }

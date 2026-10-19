@@ -1,3 +1,5 @@
+using FkYouTube.Playback;
+
 namespace FkYouTube;
 
 public partial class MainWindow
@@ -21,14 +23,18 @@ public partial class MainWindow
             ItemCount.Text = UiText.F("{0:N0}개", "{0:N0} items", "{0:N0} 件", _items.Count);
         UpdatePauseControls();
         RefreshLiveControls(_snapshot);
-        if (_snapshot is {} snapshot)
-        {
-            DecoderLabel.Text = snapshot.HardwareDecoder is null or "unavailable"
+        if (_snapshot is {} snapshot) RefreshDecoderLabel(snapshot);
+        if (_statusTextFactory is {} status) StatusText.Text = status();
+    }
+
+    private void RefreshDecoderLabel(PlaybackSnapshot snapshot)
+    {
+        DecoderLabel.Text = _activeAudioOnly
+            ? UiText.T("오디오 전용", "Audio only", "音声のみ")
+            : snapshot.HardwareDecoder is null or "unavailable"
                 ? UiText.T("디코더 확인 중", "Checking decoder", "デコーダーを確認中")
                 : string.IsNullOrWhiteSpace(snapshot.HardwareDecoder) || snapshot.HardwareDecoder == "no"
                     ? UiText.T("CPU 디코딩", "CPU decoding", "CPU デコード")
                 : "HW · " + snapshot.HardwareDecoder;
-        }
-        if (_statusTextFactory is {} status) StatusText.Text = status();
     }
 }

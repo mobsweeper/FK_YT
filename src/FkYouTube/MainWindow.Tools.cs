@@ -116,13 +116,18 @@ public partial class MainWindow
         if (_toolUpdateCts is not null || _closing || _toolUpdateInfo is not { IsUpdateAvailable: true } info || info.Tool != SelectedTool) return;
         _toolUpdateTask = RunToolOperationAsync(async token =>
         {
+            var owner = _toolUpdateCts;
+            var acceptingProgress = true;
             var progress = new Progress<ToolchainUpdateProgress>(p =>
             {
-                if (_closing || token.IsCancellationRequested) return;
+                if (!acceptingProgress || _closing || token.IsCancellationRequested || !ReferenceEquals(_toolUpdateCts, owner)) return;
                 ToolUpdateState.Text = p.Message + (p.TotalBytes is > 0
                     ? $" · {p.BytesReceived / 1048576d:N1} / {p.TotalBytes / 1048576d:N1} MiB" : "");
             });
-            await ToolUpdates.StageAsync(info, progress, token);
+            // Progress<T> posts to the UI context. Retire queued callbacks before
+            // publishing any completion/cancellation/error or successor status.
+            try { await ToolUpdates.StageAsync(info, progress, token); }
+            finally { acceptingProgress = false; }
             _toolUpdateInfo = null;
             // A normal return means the pending journal was committed. A late
             // Cancel must not hide that successful restart reservation.

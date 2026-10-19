@@ -279,5 +279,108 @@ def main(argv=None):
             ydl.params["cookiefile"] = None
 
 
+def run_live_fragment_stream(argv):
+    """One native live-from-start track on stdout; never a merged CLI stdout.
+
+    The parent starts video and audio consumers concurrently. The native DASH
+    downloader uses short-lived fragment files in the parent's private owned
+    working directory; stdout is a backpressured binary pipe, not a recording.
+    """
+    import yt_dlp
+    from yt_dlp.globals import IN_CLI, plugin_dirs
+    from yt_dlp.utils import DownloadError
+
+    class SafeLogger:
+        code = "generic"
+
+        def debug(self, _message):
+            pass
+
+        def warning(self, message):
+            self.code = classify_error(message)
+
+        error = warning
+
+    logger = SafeLogger()
+    try:
+        sys.stdin.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+        line = sys.stdin.readline(MAX_LINE + 1)
+        request = json.loads(line) if line and len(line) <= MAX_LINE else None
+        if (not isinstance(request, dict)
+                or set(request) != {"accountContext", "operation", "track", "maxHeight"}
+                or request["operation"] != "live_fragment_stream"
+                or request["track"] not in ("video", "audio")
+                or type(request["maxHeight"]) is not int
+                or not 0 <= request["maxHeight"] <= 16384):
+            raise ValueError("Invalid account request")
+        account = validate_account_context(request["accountContext"])
+        IN_CLI.value = True
+        parsed = yt_dlp.parse_options(argv)
+        plugin_dirs.value = []
+        if (len(parsed.urls) != 1 or re.fullmatch(
+                r"https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}", parsed.urls[0]) is None):
+            raise ValueError("Invalid video URL")
+        # A caller-supplied general CLI output format cannot redirect bytes to a
+        # file, concatenate two never-ending tracks, or print JSON into media.
+        track_format = "bestvideo" if request["track"] == "video" else "bestaudio"
+        track_format += "[protocol=http_dash_segments_generator]"
+        if request["track"] == "video" and request["maxHeight"]:
+            track_format += f"[height<={request['maxHeight']}]"
+
+        fragment_progress = {"index": 0, "completed": 0}
+
+        def bound_fragment(progress):
+            # HttpFD's max_filesize only checks a known Content-Length. The
+            # DASH progress is cumulative; its fragment_index advances only when
+            # a fragment finishes. Bound this fragment, not the whole broadcast.
+            # The fixed HttpFD block size limits overshoot to one 64 KiB block.
+            downloaded = progress.get("downloaded_bytes", 0)
+            index = progress.get("fragment_index", fragment_progress["index"])
+            if downloaded - fragment_progress["completed"] > 64 * 1024 * 1024:
+                raise DownloadError("Live fragment exceeded its size limit")
+            if index > fragment_progress["index"]:
+                fragment_progress.update(index=index, completed=downloaded)
+
+        parsed.ydl_opts.update({
+            "format": track_format, "live_from_start": True,
+            "outtmpl": {"default": "-"}, "paths": {},
+            "logger": logger, "quiet": True, "no_warnings": True,
+            "noprogress": True, "logtostderr": True,
+            "simulate": False, "skip_download": False, "ignoreerrors": False,
+            "noplaylist": True, "cachedir": False, "mark_watched": False,
+            "writeinfojson": False, "writethumbnail": False,
+            "writesubtitles": False, "writeautomaticsub": False,
+            "writeannotations": False, "getcomments": False,
+            "forcejson": False, "dump_single_json": False, "forceprint": {},
+            "print_to_file": {}, "postprocessors": [], "postprocessor_hooks": [],
+            "progress_hooks": [bound_fragment], "download_archive": None,
+            "external_downloader": {"default": "native"},
+            "concurrent_fragment_downloads": 1, "continuedl": False,
+            "nopart": False, "keep_fragments": False, "_no_ytdl_file": True,
+            "skip_unavailable_fragments": False, "buffersize": 65536,
+            "noresizebuffer": True, "max_filesize": 64 * 1024 * 1024,
+            "socket_timeout": 15, "retries": 1, "fragment_retries": 1,
+            "extractor_retries": 1, "overwrites": True,
+        })
+        with create_youtube_dl(parsed.ydl_opts, account) as ydl:
+            try:
+                result = ydl.download(parsed.urls)
+            finally:
+                ydl.params["cookiefile"] = None
+        if result:
+            print("FK_YT_ERROR:" + logger.code, file=sys.stderr, flush=True)
+            return 1
+        return 0
+    except (Exception, KeyboardInterrupt, SystemExit) as error:
+        code = classify_error(error)
+        if code == "generic":
+            code = logger.code
+        print("FK_YT_ERROR:" + code, file=sys.stderr, flush=True)
+        return 1
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--fk-live-fragment-stream"]:
+        sys.exit(run_live_fragment_stream(sys.argv[2:]))
     sys.exit(run(sys.argv[1:]))

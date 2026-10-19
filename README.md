@@ -15,6 +15,8 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 *Account details and selected thumbnails are blurred. Videos and artwork shown belong to their respective rights holders.*
 
+For 1.1.2 downloads, installation and source access, see the [release guide](docs/RELEASE-1.1.2.md) and [usage and limits](docs/FEATURES-1.1.2.md). The 1.1 release and verification records below describe that earlier version.
+
 <!-- PUBLICATION-STATUS-BEGIN -->
 > **1.1 release files and verification**
 > **[Release files and availability: FK_YT v1.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1).** Compare downloads with [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt). Installation, installed-app launch/playback, installer updates and removal have been verified on Windows 10 and Windows 11, as confirmed by the maintainer on 2026-10-17. Installation time has not been measured. See the [files and verification scope](docs/RELEASE-1.1.md), [1.1 changes](docs/FEATURES-1.1.md), and [licensing record](docs/LICENSING-1.1.md).

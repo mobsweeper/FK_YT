@@ -82,6 +82,7 @@ public sealed class AppSettings
     public string FirefoxProfile { get; set; } = "";
     public string AccountKey { get; set; } = "guest";
     public int MaxHeight { get; set; } = 0;
+    public bool AudioOnly { get; set; }
     public int QualityPreferenceVersion { get; set; } = 0;
     public int HistorySyncPreferenceVersion { get; set; } = 0;
     public bool SyncHistory { get; set; } = false;

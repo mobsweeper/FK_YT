@@ -71,6 +71,9 @@ public partial class MainWindow : Window
     private VideoItem? _current;
     private PlaybackSnapshot? _snapshot;
     private bool _pausedPlaybackIntent;
+    // The sidebar stores the next playback preference. Quality/retry reloads
+    // retain this active mode until playback is left or another video is opened.
+    private bool _activeAudioOnly;
     private MpvPlayerService.PauseIntent? _playPauseIntent;
     private int _feedGeneration,_videoGeneration,_videoMetadataGeneration,_viewGeneration;
     private long _expectedMediaGeneration;
@@ -126,6 +129,7 @@ public partial class MainWindow : Window
         foreach(FirefoxProfile p in ProfileCombo.Items)if(p.Path==_settings.FirefoxProfile)ProfileCombo.SelectedItem=p;
         HistorySyncCheck.IsChecked=_settings.SyncHistory;PlaylistUrlBox.Text=_settings.PlaylistUrl;VolumeSlider.Value=_settings.Volume;
         HideMembersCheck.IsChecked=_settings.HideMembersOnly;AutoPlayCheck.IsChecked=_settings.AutoPlayNext;IncognitoCheck.IsChecked=_settings.Incognito;
+        AudioOnlyCheck.IsChecked=_settings.AudioOnly;
         foreach(ComboBoxItem i in SpeedCombo.Items)if(i.Tag?.ToString()==_settings.Speed.ToString(CultureInfo.InvariantCulture))SpeedCombo.SelectedItem=i;
         _player.SnapshotChanged+=snapshot=>Dispatcher.BeginInvoke(()=>OnSnapshot(snapshot));
         _player.PlaybackError+=failure=>Dispatcher.BeginInvoke(()=>OnPlaybackFailure(failure));
@@ -341,11 +345,22 @@ public partial class MainWindow : Window
     {
         CancelLiveRecovery();
         _liveReconnectAttempts=0;
-        return await PlayVideoCoreAsync(item,preserveWatch,explicitStart,rememberHistory);
+        return await PlayVideoCoreAsync(item,preserveWatch,explicitStart,rememberHistory,liveEdge:preserveWatch && _liveEdgePlayback);
     }
-    private async Task<bool> PlayVideoCoreAsync(VideoItem item,bool preserveWatch=false,double? explicitStart=null,bool rememberHistory=true,CancellationToken recoveryToken=default)
+    private double GetPlaybackStartPosition(VideoItem item,double? explicitStart,string accountKey,bool incognito)
+    {
+        if(item.LiveStatus is "is_live" or "is_upcoming" or "post_live")return 0;
+        if(explicitStart is {} requested)return requested;
+        if(incognito)return 0;
+        var key=accountKey+":"+item.Id;
+        return _pendingPositions.TryGetValue(key,out var pending)
+            ?pending.Duration>0 && pending.Position>=pending.Duration-3?0:pending.Position
+            :_store.GetResumePosition(accountKey,item.Id);
+    }
+    private async Task<bool> PlayVideoCoreAsync(VideoItem item,bool preserveWatch=false,double? explicitStart=null,bool rememberHistory=true,CancellationToken recoveryToken=default,bool liveEdge=false)
     {
         if(AccountWorkBlocked)return false;
+        var playbackAccount=RatingAccountStamp;var playbackAccountKey=_settings.AccountKey;var playbackIncognito=_settings.Incognito;var requestedHeight=_settings.MaxHeight;
         preserveWatch=preserveWatch && _current is {} previous && previous.Id==item.Id && previous.Url==item.Url;
         if(preserveWatch)item=_current!;
         var priorItem=_current;
@@ -353,10 +368,7 @@ public partial class MainWindow : Window
         double start;
         try
         {
-            var key=_settings.AccountKey+":"+item.Id;
-            start=item.LiveStatus is "is_live" or "is_upcoming" or "post_live"?0:explicitStart??(_settings.Incognito?0:_pendingPositions.TryGetValue(key,out var pending)
-                ?pending.Duration>0 && pending.Position>=pending.Duration-3?0:pending.Position
-                :_store.GetResumePosition(_settings.AccountKey,item.Id));
+            start=GetPlaybackStartPosition(item,explicitStart,playbackAccountKey,playbackIncognito);
         }
         catch(Exception error)when(IsStorageError(error))
         {SetStatus(()=>UiText.T("이어보기 위치를 읽지 못했습니다. 현재 영상을 유지합니다. 저장소 접근 문제를 해결한 뒤 다시 시도해 주세요.","Could not read the resume position. The current video was kept. Resolve the storage access issue and try again.","再開位置を読み取れませんでした。現在の動画を維持します。保存先へのアクセスの問題を解決してから、もう一度お試しください。"));return false;}
@@ -370,15 +382,25 @@ public partial class MainWindow : Window
         _viewGeneration++;
         _videoCts?.Cancel();
         if(!preserveWatch){_videoMetadataGeneration++;_commentsCts?.Cancel();_qualityCts?.Cancel();}
+        var requestedAudioOnly=preserveWatch?_activeAudioOnly:_settings.AudioOnly;
+        var audioOnly=requestedAudioOnly && item.LiveStatus is not ("is_live" or "is_upcoming" or "post_live");
         var usePrepared=item.LiveStatus is not ("is_live" or "is_upcoming" or "post_live") &&
-            ReferenceEquals(item,_preparedItem) && explicitStart==0 && !preserveWatch;
+            ReferenceEquals(item,_preparedItem) && _preparedAudioOnly==audioOnly && explicitStart==0 && !preserveWatch;
+        var needsStatusLookup=item.LiveStatus is "is_upcoming" or "post_live" || item.LiveStatus=="is_live" && !liveEdge ||
+            !usePrepared && item.LiveStatus is not ("not_live" or "was_live" or "is_live");
         var preparedResolutions=usePrepared?_preparedResolutions:null;
         var preparedCaptions=usePrepared?_preparedCaptions:[];
         ResetPlaybackExtras(usePrepared,preserveWatch);
         using var cts=CancellationTokenSource.CreateLinkedTokenSource(_accountCts.Token,recoveryToken);_videoCts=cts;
-        var token=cts.Token;var entered=false;var succeeded=false;var loadSubmitted=false;var cleanupAttempted=false;
+        var token=cts.Token;var entered=false;var succeeded=false;var loadSubmitted=false;var cleanupAttempted=false;var loadFailed=false;
         CookieLease? loadCookie=null;long cookieGeneration=0;MpvPlayerService.PlaybackOwner? loadOwner=null;
         var generation=++_videoGeneration;_activePlaybackRecoveryToken=recoveryToken;_lastPlaybackAccessCode=null;_expectedMediaGeneration=-1;_current=item;_snapshot=null;_hasLoadedCurrent=false;_hasObservedPositivePosition=false;_canSaveZeroPosition=false;SetSyncUiText(()=>"");ResetSeekInteraction();SeekSlider.IsEnabled=false;
+        var qualityNoticeCleared=ClearDeferredLiveQuality();_activePlaybackMaxHeight=requestedHeight;
+        _liveFromStartPlayback=item.LiveStatus=="is_live" && !liveEdge;_liveEdgePlayback=liveEdge;
+        _activeAudioOnly=audioOnly;RefreshAudioPlaybackUi();
+        // Preserved native LIVE loads may skip every catalog reset. Restore only
+        // the retired notice, after the new playback modes own its presentation.
+        if(preserveWatch && qualityNoticeCleared && !audioOnly)RefreshQualitySelectionText();
         RefreshLiveControls(null);
         if(!preserveWatch)ResetQualityDisplay(item);
         if(!preserveWatch){_watch.Reset();_historyWatch.Reset();_historyEventId=Guid.NewGuid().ToString("N");_playingListGeneration=_feedGeneration;_playingIndex=_items.FindIndex(candidate=>ReferenceEquals(candidate,item));_autoplaySeen.Add(item.Id);}
@@ -406,63 +428,99 @@ public partial class MainWindow : Window
                 else _player.RetainPlaybackCookies(loadOwner,previousCookie);
                 _playCookie=null;
             }
+            // The UI already belongs to the new request. Do not leave its predecessor
+            // playing while a bounded metadata lookup holds the pause/load gate.
+            // Stop only the owner captured under this gate, never a later session.
+            if(needsStatusLookup && !await _player.StopOwnedPlaybackAsync(loadOwner))
+                throw new IOException(UiText.T("이전 재생의 종료를 확인하지 못해 새 영상을 열지 않았습니다. 다시 시도해 주세요.",
+                    "The previous playback could not be confirmed stopped. The new video was not opened. Try again.",
+                    "前の再生の終了を確認できないため、新しい動画を開きませんでした。もう一度お試しください。"));
+            token.ThrowIfCancellationRequested();
+            if(AccountWorkBlocked || generation!=_videoGeneration || playbackAccount!=RatingAccountStamp)return false;
             if(VideoHost.Handle==0){UpdateLayout();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.Loaded);}
             token.ThrowIfCancellationRequested();
             if(!_playerStarted){await _player.StartAsync(VideoHost.Handle);_playerStarted=true;}
-            if(_closing || token.IsCancellationRequested || generation!=_videoGeneration)return false;
+            if(AccountWorkBlocked || token.IsCancellationRequested || generation!=_videoGeneration || playbackAccount!=RatingAccountStamp)return false;
             loadOwner=_player.CapturePlaybackOwner();
-            var accountContext=_settings.Incognito?null:_session.SelectedChannel;
+            var accountContext=playbackIncognito?null:_session.SelectedChannel;
             PreparedVideo? resolvedStream=null;
             LiveHlsMedia? liveStream=null;
-            if(item.LiveStatus is "is_upcoming" or "post_live" || item.LiveStatus=="is_live" && accountContext is {AuthUser:>0})
+            var selectedResolvedLive=false;
+            // A feed's is_live value may outlive the broadcast. Revalidate once
+            // before choosing the live-only fragment transport; status lookup
+            // already has a 45-second deadline and uses this load's account/token.
+            if(needsStatusLookup)
             {
-                PlaybackStatus status;
-                if(accountContext is {AuthUser:>0})
-                {
-                    var resolution=await _youtube.ResolvePlaybackAsync(item.Url,_settings.MaxHeight,token,_settings.Incognito,_player.PreferredSubtitleLanguage);
-                    status=resolution.Status;resolvedStream=resolution.Vod;liveStream=resolution.Live;
-                }
-                else
-                    status=await _youtube.GetPlaybackStatusAsync(item.Url,token,_settings.Incognito);
+                var status=await _youtube.GetPlaybackStatusAsync(item.Url,token,playbackIncognito);
                 token.ThrowIfCancellationRequested();
-                if(_closing || generation!=_videoGeneration)return false;
+                if(AccountWorkBlocked || generation!=_videoGeneration || playbackAccount!=RatingAccountStamp || !ReferenceEquals(_videoCts,cts))return false;
                 item=ReplaceCurrentMetadata(item with{LiveStatus=status.LiveStatus});
+                if(status.LiveStatus=="unknown")throw new InvalidDataException(UiText.T("영상 상태를 확인하지 못했습니다. 다시 열어 주세요.","Could not confirm the video status. Open it again.","動画の状態を確認できませんでした。開き直してください。"));
+                _liveFromStartPlayback=status.IsLive && !liveEdge;
+                audioOnly=requestedAudioOnly && !status.IsLive;_activeAudioOnly=audioOnly;RefreshAudioPlaybackUi();
+                if(!audioOnly)ResetQualityDisplay(item);
                 RefreshLiveControls(null);
                 if(status.IsUpcoming || status.LiveStatus=="post_live")
                     throw new InvalidOperationException(status.IsUpcoming
                         ?UiText.T("방송 예정입니다. 방송이 시작된 뒤 다시 여세요.","This stream is scheduled. Open it after the broadcast starts.","配信開始前です。開始後に開き直してください。")
                         :UiText.T("방송이 종료되어 녹화 영상을 처리 중입니다.","The broadcast has ended and its recording is processing.","配信が終了し、録画を処理中です。"));
-                if(liveStream is not null){_lastValidPosition=0;_lastValidDuration=0;preparedResolutions=liveStream.Resolutions;preparedCaptions=liveStream.Captions;}
-                else if(resolvedStream is not null){preparedResolutions=resolvedStream.Resolutions;preparedCaptions=resolvedStream.Captions;}
+                if(!status.IsLive)
+                {
+                    // A stale live occurrence can now be a VOD with its own saved
+                    // resume point. Explicit zero and Incognito still take priority.
+                    try{_lastValidPosition=GetPlaybackStartPosition(item,explicitStart,playbackAccountKey,playbackIncognito);}
+                    catch(Exception error)when(IsStorageError(error))
+                    {throw new IOException(UiText.T("녹화본의 이어보기 위치를 읽지 못해 재생을 시작하지 않았습니다. 저장소 접근 문제를 확인해 주세요.",
+                        "Playback was not started because the recording's resume position could not be read. Check storage access.",
+                        "録画の再開位置を読み取れなかったため、再生を開始しませんでした。保存先へのアクセスを確認してください。"),error);}
+                }
             }
             async Task<PlaybackResolution> ResolveSelectedPlaybackAsync(CancellationToken resolveToken)
             {
                 resolveToken.ThrowIfCancellationRequested();
                 PlaybackResolution stream;
-                try{stream=await _youtube.ResolvePlaybackAsync(item.Url,_settings.MaxHeight,resolveToken,subtitleLanguage:_player.PreferredSubtitleLanguage);}
+                try{stream=await _youtube.ResolvePlaybackAsync(item.Url,requestedHeight,resolveToken,playbackIncognito,_player.PreferredSubtitleLanguage,audioOnly,!liveEdge);}
                 catch(InvalidDataException){throw new IOException(UiText.T("선택한 계정의 영상 스트림을 읽지 못했습니다. 다른 영상을 재생하거나 잠시 후 다시 시도해 주세요.","Could not read the video stream for the selected account. Try another video or try again later.","選択したアカウントの動画ストリームを読み取れませんでした。別の動画を再生するか、しばらくしてから再試行してください。"));}
                 preparedResolutions=stream.Live?.Resolutions??stream.Vod?.Resolutions;
                 preparedCaptions=stream.Live?.Captions??stream.Vod?.Captions??Array.Empty<PreparedCaption>();
+                audioOnly=requestedAudioOnly && !stream.Status.IsLive;
+                selectedResolvedLive=stream.Status.IsLive;
                 return stream;
             }
-            if(_closing || token.IsCancellationRequested || generation!=_videoGeneration)return false;
+            if(AccountWorkBlocked || token.IsCancellationRequested || generation!=_videoGeneration || playbackAccount!=RatingAccountStamp)return false;
             _playCookie=AcquirePlaybackSession();_expectedMediaGeneration=_player.Snapshot.MediaGeneration+1;
             loadCookie=_playCookie;cookieGeneration=_expectedMediaGeneration;
             loadSubmitted=true;
-            var knownNativeLive=item.LiveStatus=="is_live" && accountContext is not {AuthUser:>0};
-            if(knownNativeLive){_lastValidPosition=0;_lastValidDuration=0;}
-            await _player.LoadAsync(item.Url,_playCookie.Path,_settings.MaxHeight,_lastValidPosition,token,accountContext,resolvedStream,
+            var fromStart=item.LiveStatus=="is_live" && !liveEdge;
+            var knownNativeLive=item.LiveStatus=="is_live" && liveEdge && accountContext is not {AuthUser:>0};
+            if(fromStart || knownNativeLive){_lastValidPosition=0;_lastValidDuration=0;}
+            _liveFromStartPlayback=fromStart;_liveEdgePlayback=liveEdge;
+            var transportCookie=loadCookie;
+            var usedFromStart=fromStart;
+            async Task<LiveFromStartTransport> ResolveFromStartAsync(CancellationToken streamToken)
+            {
+                var transport=await LiveFromStartTransport.StartAsync(_paths,item.Url,transportCookie!,accountContext,requestedHeight,streamToken);
+                usedFromStart=true;
+                return transport;
+            }
+            await _player.LoadAsync(item.Url,_playCookie.Path,requestedHeight,_lastValidPosition,token,accountContext,resolvedStream,
                 null,pauseIntent.Paused,pauseIntent,liveStream,null,
-                accountContext is {AuthUser:>0} && liveStream is null && resolvedStream is null?ResolveSelectedPlaybackAsync:null,knownNativeLive);
+                accountContext is {AuthUser:>0} && !fromStart && liveStream is null && resolvedStream is null?ResolveSelectedPlaybackAsync:null,
+                knownNativeLive,audioOnly,fromStart,liveEdge?null:ResolveFromStartAsync);
             if(_closing || token.IsCancellationRequested || generation!=_videoGeneration)return false;
+            _liveFromStartPlayback=usedFromStart;
+            if(selectedResolvedLive)item=ReplaceCurrentMetadata(item with{LiveStatus="is_live"});
+            _activeAudioOnly=audioOnly;RefreshAudioPlaybackUi();
+            if(!audioOnly && QualityLoadButton.Visibility==Visibility.Collapsed && !QualityCombo.IsEnabled)ResetQualityDisplay(item);
             loadOwner=_player.CapturePlaybackOwner();
             await _player.CommandAsync(token,"set_property","volume",_settings.Volume);
             if(_closing || token.IsCancellationRequested || generation!=_videoGeneration)return false;
             await _player.CommandAsync(token,"set_property","speed",_settings.Speed);
             if(_closing || token.IsCancellationRequested || generation!=_videoGeneration)return false;
-            if(preparedResolutions is {Count:>0} && (!preserveWatch || _resolutions.Count==0)){_qualityKey=$"{_settings.AccountKey}:{_settings.Incognito}:{item.Id}";_resolutions=preparedResolutions;DisplayResolutions();}
-            // Ordinary playback resolves only once in mpv. Fetch the full format list on demand.
-            if(preparedCaptions.Count>0)_=TrackSubtitleTaskAsync(LoadPreparedCaptionsAsync(preparedCaptions,generation));
+            if(!audioOnly && preparedResolutions is {Count:>0} && (!preserveWatch || _resolutions.Count==0)){_qualityKey=$"{_settings.AccountKey}:{_settings.Incognito}:{item.Id}";_resolutions=preparedResolutions;DisplayResolutions();}
+            // Native VOD still resolves its media in mpv; an unknown live status
+            // may have needed a metadata probe above. Fetch the format list on demand.
+            if(!audioOnly && preparedCaptions.Count>0)_=TrackSubtitleTaskAsync(LoadPreparedCaptionsAsync(preparedCaptions,generation));
             // A quality change can cancel the first load before its metadata request starts.
             // Preserve an existing request, but still start the first request exactly once.
             if(!_relatedRequested)
@@ -476,7 +534,7 @@ public partial class MainWindow : Window
         }
         catch(OperationCanceledException){await StopFailedOwnerAsync();}
         catch(Exception ex)when(ex is IOException or InvalidOperationException or TimeoutException or Win32Exception or InvalidDataException or UnauthorizedAccessException or ArgumentException)
-        {await StopFailedOwnerAsync();if(generation==_videoGeneration){_lastPlaybackAccessCode=(ex as YouTubeAccessException)?.Code;SetStatus(()=>UiText.F("재생을 시작하지 못했습니다: {0}","Could not start playback: {0}","再生を開始できませんでした: {0}",ex.Message));if(!preserveWatch)SetCommentUiText(()=>UiText.T("댓글 보기를 누르면 별도로 조회할 수 있습니다.","Click Comments to load them separately.","「コメント」を押すと個別に取得できます。"));if(ex is YouTubeAccessException{AuthenticationRequired:true}){if(!_relatedRequested)_relatedTask=LoadRelatedAsync(item,_videoMetadataGeneration);HandleAuthenticationRequired();}}}
+        {loadFailed=true;await StopFailedOwnerAsync();if(generation==_videoGeneration){_lastPlaybackAccessCode=(ex as YouTubeAccessException)?.Code??(ex as LiveFromStartException)?.ErrorCode;SetStatus(()=>UiText.F("재생을 시작하지 못했습니다: {0}","Could not start playback: {0}","再生を開始できませんでした: {0}",ex.Message));if(!preserveWatch)SetCommentUiText(()=>UiText.T("댓글 보기를 누르면 별도로 조회할 수 있습니다.","Click Comments to load them separately.","「コメント」を押すと個別に取得できます。"));if(ex is YouTubeAccessException{AuthenticationRequired:true} || ex is LiveFromStartException{ErrorCode:"signin_age"}){if(!_relatedRequested)_relatedTask=LoadRelatedAsync(item,_videoMetadataGeneration);HandleAuthenticationRequired();}}}
         finally
         {
             if(!succeeded && !cleanupAttempted)await StopFailedOwnerAsync();
@@ -496,6 +554,12 @@ public partial class MainWindow : Window
                 }
             }
             if(ReferenceEquals(_videoCts,cts))_videoCts=null;NotifyPlaybackQueueChanged();if(entered)_videoStartGate.Release();
+            if(!succeeded && _liveFromStartPlayback && generation==_videoGeneration)
+            {
+                _liveEndHandledGeneration=generation;
+                if(loadFailed && !token.IsCancellationRequested)
+                {_failedLiveFromStartGeneration=generation;if(_liveQualityDeferred)RefreshQualitySelectionText();}
+            }
             RefreshLiveControls(_snapshot);if(_snapshot is {IsLive:true} liveSnapshot)ObserveLivePlayback(liveSnapshot);
         }
         return succeeded && !_closing && generation==_videoGeneration;
@@ -510,6 +574,9 @@ public partial class MainWindow : Window
     private void OnSnapshot(PlaybackSnapshot snapshot)
     {
         if(AccountWorkBlocked || _current==null || snapshot.MediaGeneration!=_expectedMediaGeneration || snapshot.VideoUrl!=_current.Url)return;
+        // Different native publishers may enqueue callbacks out of order. The
+        // revision describes state mutation order, not callback arrival order.
+        if(_snapshot is {} latest && latest.MediaGeneration==snapshot.MediaGeneration && snapshot.Revision<latest.Revision)return;
         var previous=_snapshot;_snapshot=snapshot;
         var observedLiveStatus=ConfirmedLiveEndStatus(snapshot)??snapshot.LiveStatus;
         if(observedLiveStatus!="unknown" && _current.LiveStatus!=observedLiveStatus)ReplaceCurrentMetadata(_current with{LiveStatus=observedLiveStatus});
@@ -545,7 +612,7 @@ public partial class MainWindow : Window
         if(!liveSeek && !_seekDragging && !_pendingSeek.HasValue){SeekSlider.Maximum=Math.Max(1,snapshot.Duration);SeekSlider.Value=Math.Clamp(snapshot.Position,0,SeekSlider.Maximum);}
         TimeLabel.Text=liveSeek && ConfirmedLiveEndStatus(snapshot) is null?"LIVE · "+VideoItem.FormatTime(snapshot.Position):VideoItem.FormatTime(snapshot.Position)+" / "+VideoItem.FormatTime(snapshot.Duration);
         UpdatePauseControls();
-        DecoderLabel.Text=snapshot.HardwareDecoder=="unavailable"?UiText.T("디코더 확인 중","Checking decoder","デコーダーを確認中"):string.IsNullOrWhiteSpace(snapshot.HardwareDecoder)||snapshot.HardwareDecoder=="no"?UiText.T("CPU 디코딩","CPU decoding","CPU デコード"):"HW · "+snapshot.HardwareDecoder;
+        RefreshDecoderLabel(snapshot);
         if(_watch.Observe(_clock.Elapsed.TotalSeconds,snapshot.Position,snapshot.Duration,snapshot.Speed,snapshot.Paused,snapshot.Buffering,snapshot.Seeking,snapshot.Loaded))
             SavePosition();
         // Remote history counts only playback after opting in. Local history
@@ -875,6 +942,9 @@ public partial class MainWindow : Window
         if(!ClosePopoutForPlaybackStop())return false;
         if(!_closing && (!TryPersistHistoryDraft() || !SavePosition()))return false;
         var generation=++_videoGeneration;_videoMetadataGeneration++;_videoCts?.Cancel();_commentsCts?.Cancel();_qualityCts?.Cancel();_current=null;_snapshot=null;_pausedPlaybackIntent=false;_playPauseIntent=null;ResetSeekInteraction();
+        _activeAudioOnly=false;RefreshAudioPlaybackUi();
+        ClearDeferredLiveQuality();
+        _liveFromStartPlayback=false;_liveEdgePlayback=false;
         RefreshLiveControls(null);
         ResetPlaybackExtras();_autoplaySeen.Clear();_playbackTrail.Clear();_playbackTrailRevision++;UpdateSkipButtons();
         await _videoStartGate.WaitAsync();
@@ -1021,10 +1091,18 @@ public partial class MainWindow : Window
     }
     private async void Quality_Changed(object sender,SelectionChangedEventArgs e)
     {
-        if(!_ready || _updatingQuality || AccountWorkBlocked || QualityCombo.SelectedItem is not int height)return;
+        if(!_ready || _updatingQuality || AccountWorkBlocked || _activeAudioOnly || QualityCombo.SelectedItem is not int height)return;
         var previous=_settings.MaxHeight;var previousSelection=e.RemovedItems.OfType<int>().Select(value=>(int?)value).FirstOrDefault();_settings.MaxHeight=height;
         if(!TrySaveSettings())
         {_settings.MaxHeight=previous;_updatingQuality=true;try{QualityCombo.SelectedItem=previousSelection;}finally{_updatingQuality=false;}return;}
+        if(_current is not null && _liveFromStartPlayback)
+        {
+            // A fresh from-start pipe cannot resume the current server timestamp.
+            // Save only the next load's cap, preserving current cache and pause intent.
+            _liveQualityDeferred=height!=_activePlaybackMaxHeight;
+            RefreshQualitySelectionText();return;
+        }
+        ClearDeferredLiveQuality();
         SetQualityUiText(()=>"");
         if(_current!=null)await PlayVideoAsync(_current,true,_lastValidPosition);
     }
@@ -1343,6 +1421,7 @@ public partial class MainWindow : Window
             await CleanupAsync("feed disposal",()=>_feed.DisposeAsync().AsTask());
             await CleanupAsync("player disposal",()=>_player.DisposeAsync().AsTask());
             await CleanupAsync("owned process recovery drain",ProcessRunner.DrainRecoveryAsync);
+            await CleanupAsync("live fragment cleanup drain",LiveFromStartTransport.DrainCleanupAsync);
             await CleanupAsync("tool update staging cleanup drain",ToolchainUpdateService.DrainStageCleanupAsync);
             await CleanupAsync("download staging cleanup drain",DownloadService.DrainStageCleanupAsync);
         }

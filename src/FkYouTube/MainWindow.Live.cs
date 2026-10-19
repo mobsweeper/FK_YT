@@ -12,8 +12,12 @@ public partial class MainWindow
     private Task _liveRecoveryTask = Task.CompletedTask;
     private CancellationToken _activePlaybackRecoveryToken;
     private int _liveReconnectAttempts, _liveEndHandledGeneration = -1;
+    private sealed record LiveEndProbe(int VideoGeneration, long MediaGeneration, string VideoUrl,
+        string Account, CancellationToken AccountToken);
+    private LiveEndProbe? _lastLiveEndProbe;
     private string? _lastPlaybackAccessCode;
     private Func<string>? _liveNotice;
+    private bool _liveFromStartPlayback,_liveEdgePlayback;
     private long _confirmedLiveEndMediaGeneration = -1;
     private string? _confirmedLiveEndStatus;
     private string? ConfirmedLiveEndStatus(PlaybackSnapshot? snapshot) => snapshot is not null &&
@@ -149,6 +153,9 @@ public partial class MainWindow
         { popoutLiveEdge.Visibility = LiveEdgeButton.Visibility; popoutLiveEdge.IsEnabled = LiveEdgeButton.IsEnabled; }
         LiveState.Text = status switch
         {
+            "is_live" when _liveFromStartPlayback => snapshot is {Loaded:true}
+                ?UiText.T("● LIVE · 제공되는 시작 구간 · 되감기는 현재 버퍼만", "● LIVE · Available beginning · Rewind within current buffer", "● LIVE · 提供される開始区間・巻き戻しは現在のバッファ内")
+                :UiText.T("● LIVE · 시작 구간을 열 수 없으면 LIVE로 현재 시점 재생", "● LIVE · Use LIVE for the current edge if the beginning is unavailable", "● LIVE · 開始区間を開けない場合は LIVE で現在位置を再生"),
             "is_live" => snapshot is not null && LiveSeekRanges(snapshot).Length > 0
                 ? UiText.T("● LIVE · 현재 버퍼 범위만 되감기 가능", "● LIVE · Rewind within the current buffer only", "● LIVE · 現在のバッファ内のみ巻き戻し可能")
                 : UiText.T("● LIVE · 탐색 범위 미확인", "● LIVE · No verified seek range", "● LIVE · シーク範囲未確認"),
@@ -166,11 +173,21 @@ public partial class MainWindow
         if (!CanReloadLive || _current is not { } current) return;
         // Opening a fresh live stream reaches the server's current edge even if
         // there is no local DVR cache. The user's pause intent is preserved.
-        await PlayVideoAsync(current with { LiveStatus = "is_live" }, true, 0, false);
+        CancelLiveRecovery();_liveReconnectAttempts=0;
+        await PlayVideoCoreAsync(current with { LiveStatus = "is_live" }, true, 0, false,liveEdge:true);
+    }
+
+    private void ShowLiveReconnectLimit()
+    {
+        _liveNotice = () => UiText.T("자동 라이브 재연결의 누적 한도(3회)에 도달했습니다. LIVE 버튼으로 다시 시도하세요.",
+            "The cumulative automatic live reconnection limit (3 attempts) was reached. Use LIVE to retry.",
+            "自動ライブ再接続の累計上限（3回）に達しました。LIVE ボタンで再試行してください。");
+        SetStatus(_liveNotice);
     }
 
     private void ObserveLivePlayback(PlaybackSnapshot snapshot)
     {
+        if (_current is null || snapshot.MediaGeneration != _expectedMediaGeneration || snapshot.VideoUrl != _current.Url) return;
         if (BlockingLiveFailure(snapshot))
         {
             // A late native classification can arrive after recovery was armed.
@@ -183,39 +200,49 @@ public partial class MainWindow
             _videoCts is not null || _playPauseIntent?.Paused == true || AccountWorkBlocked || _current is null ||
             _liveRecoveryCts is not null || _liveEndHandledGeneration == _videoGeneration) return;
         _liveEndHandledGeneration = _videoGeneration;
-        if (_liveReconnectAttempts >= 3)
-        {
-            _liveNotice = () => UiText.T("라이브 재연결 3회에 실패했습니다. LIVE 버튼으로 다시 시도하세요.",
-                "The live stream could not be restored after 3 attempts. Use LIVE to retry.",
-                "ライブの再接続に3回失敗しました。LIVE ボタンで再試行してください。");
-            SetStatus(_liveNotice); return;
-        }
         _liveRecoveryTask = RecoverLiveAsync(_current, _videoGeneration, _playPauseIntent, RatingAccountStamp);
     }
 
     private async Task RecoverLiveAsync(VideoItem video, int generation, MpvPlayerService.PauseIntent? intent, string account)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_accountCts.Token);
+        var accountToken = _accountCts.Token;
+        var mediaGeneration = _expectedMediaGeneration;
+        var incognito = _settings.Incognito;
+        var terminalOnly = _liveReconnectAttempts >= 3;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(accountToken);
         _liveRecoveryCts = cts;
         using var readLifetime = BeginAccountRead();
         bool Current() => !cts.IsCancellationRequested && !AccountWorkBlocked && !BlockingLiveFailure(_snapshot) && generation == _videoGeneration &&
-            _current?.Url == video.Url && ReferenceEquals(intent, _playPauseIntent) && intent?.Paused != true && account == RatingAccountStamp;
+            mediaGeneration == _expectedMediaGeneration && _current?.Url == video.Url && ReferenceEquals(intent, _playPauseIntent) &&
+            intent?.Paused != true && account == RatingAccountStamp && accountToken == _accountCts.Token;
         try
         {
-            while (Current() && _liveReconnectAttempts < 3)
+            while (Current() && (_liveReconnectAttempts < 3 || terminalOnly))
             {
-                var attempt = ++_liveReconnectAttempts;
-                _liveNotice = () => UiText.F("라이브 연결 확인 중 · 재시도 {0}/3", "Checking live connection · Retry {0}/3", "ライブ接続を確認中・再試行 {0}/3", attempt);
-                SetStatus(_liveNotice);
-                await Task.Delay(TimeSpan.FromSeconds(new[] { 2, 5, 10 }[attempt - 1]), cts.Token);
+                if (terminalOnly)
+                {
+                    var probe = new LiveEndProbe(generation, mediaGeneration, video.Url, account, accountToken);
+                    if (_lastLiveEndProbe == probe) return;
+                    // Claim before the first await. Cancellation also consumes this
+                    // exact end observation; it must not turn into background polling.
+                    _lastLiveEndProbe = probe;
+                    ShowLiveReconnectLimit();
+                }
+                else
+                {
+                    var attempt = ++_liveReconnectAttempts;
+                    _liveNotice = () => UiText.F("라이브 연결 확인 중 · 재시도 {0}/3", "Checking live connection · Retry {0}/3", "ライブ接続を確認中・再試行 {0}/3", attempt);
+                    SetStatus(_liveNotice);
+                    await Task.Delay(TimeSpan.FromSeconds(new[] { 2, 5, 10 }[attempt - 1]), cts.Token);
+                }
                 if (!Current()) return;
                 try
                 {
-                    var status = await _youtube.GetPlaybackStatusAsync(video.Url, cts.Token, _settings.Incognito);
+                    var status = await _youtube.GetPlaybackStatusAsync(video.Url, cts.Token, incognito);
                     if (!Current()) return;
                     if (status.HasEnded)
                     {
-                        _confirmedLiveEndMediaGeneration = _expectedMediaGeneration;
+                        _confirmedLiveEndMediaGeneration = mediaGeneration;
                         _confirmedLiveEndStatus = status.LiveStatus;
                         ReplaceCurrentMetadata(_current! with { LiveStatus = status.LiveStatus });
                         _liveNotice = () => UiText.T("방송이 종료되었습니다.", "The broadcast has ended.", "配信が終了しました。");
@@ -228,27 +255,52 @@ public partial class MainWindow
                         if (_settings.AutoPlayNext && _autoplayHandledGeneration != generation)
                         {
                             _autoplayHandledGeneration = generation;
+                            var autoplayEpoch = _autoplayEpoch;
+                            var autoplayIntent = _autoplayIntentRevision;
                             // Schedule after this recovery scope unwinds so its cancellation
                             // and read lifetime cannot wait on itself during the next load.
-                            _ = Dispatcher.BeginInvoke(() => _ = AutoPlayNextAsync(generation, _autoplayEpoch));
+                            _ = Dispatcher.BeginInvoke(() =>
+                            {
+                                if (Current() && autoplayIntent == _autoplayIntentRevision)
+                                    _ = AutoPlayNextAsync(generation, autoplayEpoch);
+                            });
                         }
                         return;
                     }
-                    if (!status.IsLive) break; // Unknown/upcoming is not proof of normal EOF.
+                    if (terminalOnly || !status.IsLive) break; // Unknown/upcoming is not proof of normal EOF.
                     if (!Current()) return;
-                    var restored = await PlayVideoCoreAsync(_current! with { LiveStatus = "is_live" }, true, 0, false, cts.Token);
+                    // Pipe history cannot be resumed at an arbitrary server
+                    // timestamp. Reconnection explicitly moves to the live edge,
+                    // rather than silently restarting hours of earlier content.
+                    var movedToEdge=_liveFromStartPlayback;
+                    if(movedToEdge)
+                    {
+                        _liveNotice=()=>UiText.T("시작 구간 연결이 끊겨 현재 방송 시점으로 재연결합니다.",
+                            "The beginning stream disconnected. Reconnecting at the current live edge.",
+                            "開始区間の接続が切れたため、現在の配信位置に再接続します。");
+                        SetStatus(_liveNotice);
+                    }
+                    var restored = await PlayVideoCoreAsync(_current! with { LiveStatus = "is_live" }, true, 0, false, cts.Token,liveEdge:true);
                     if (cts.IsCancellationRequested || AccountWorkBlocked || !ReferenceEquals(intent, _playPauseIntent) || account != RatingAccountStamp) return;
                     generation = _videoGeneration;
+                    mediaGeneration = _expectedMediaGeneration;
                     if (_snapshot?.AuthenticationRequired == true || _authenticationNoticeGeneration == generation) return;
                     if (_lastPlaybackAccessCode is { } access && access is not ("network" or "generic")) return;
                     var native = _player.Snapshot;
                     if (restored && !(native.MediaGeneration == _expectedMediaGeneration && native.Ended))
-                    { _liveNotice = null; return; }
+                    {
+                        if(movedToEdge){_liveNotice=()=>UiText.T("현재 방송 시점으로 재연결했습니다.","Reconnected at the current live edge.","現在の配信位置に再接続しました。");SetStatus(_liveNotice);}
+                        else _liveNotice=null;
+                        return;
+                    }
                 }
                 catch (YouTubeAccessException error) when (error.AuthenticationRequired)
                 { if (Current()) HandleAuthenticationRequired(); return; }
                 catch (YouTubeAccessException error) when (error.Code is not ("network" or "generic"))
                 { if (Current()) { _liveNotice = () => error.Message; SetStatus(_liveNotice); } return; }
+                catch (Exception error) when (terminalOnly && (error is IOException or InvalidDataException or UnauthorizedAccessException or
+                    InvalidOperationException or TimeoutException or Win32Exception or System.Text.Json.JsonException))
+                { if (Current()) ShowLiveReconnectLimit(); return; }
                 catch (Exception error) when (error is InvalidDataException or UnauthorizedAccessException)
                 {
                     if (Current())
@@ -265,6 +317,7 @@ public partial class MainWindow
             }
             if (Current())
             {
+                if (terminalOnly) { ShowLiveReconnectLimit(); return; }
                 _liveNotice = () => UiText.T("라이브를 복구하지 못했습니다. 방송 상태를 확인한 뒤 LIVE 버튼으로 다시 시도하세요.",
                     "Could not restore the live stream. Check the broadcast, then use LIVE to retry.",
                     "ライブを復旧できませんでした。配信状態を確認し、LIVE ボタンで再試行してください。");
@@ -278,7 +331,8 @@ public partial class MainWindow
             if (released) _liveRecoveryCts = null;
             // An end notification can be observed while the recovery owns its
             // token. Replay that state once after releasing the owner; this is
-            // still bounded by the same three-attempt budget.
+            // still bounded by the same three-attempt budget and a single terminal
+            // probe for the exact video/media/account generation.
             // A canceled older task may have temporarily blocked a newer live
             // generation. Re-observe that current owner, but do not re-arm this
             // same generation after a manual Next/pause canceled its recovery.

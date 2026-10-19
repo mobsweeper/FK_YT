@@ -15,11 +15,14 @@ public partial class MainWindow
 
     private CancellationTokenSource? _downloadCts;
     private Task _downloadTask=Task.CompletedTask;
+    // Audio playback hides the video selector without replacing its old items.
+    // Downloads still save video, using the saved cap rather than that stale UI.
+    private int DownloadMaxHeight=>!_activeAudioOnly && QualityCombo.SelectedItem is int selected?selected:_settings.MaxHeight;
     private async void Download_Click(object sender,RoutedEventArgs e)
     {
         if(_current==null || _closing)return;
         if(_downloadCts!=null){SetStatus(()=>UiText.T("현재 다운로드를 완료하거나 취소한 뒤 다시 저장해 주세요.","Finish or cancel the current download before saving again.","現在のダウンロードを完了またはキャンセルしてから、もう一度保存してください。"));return;}
-        var video=_current;var height=QualityCombo.SelectedItem is int selected?selected:_settings.MaxHeight;
+        var video=_current;var height=DownloadMaxHeight;
         var dialog=new SaveFileDialog{Title=height==0?UiText.T("영상 저장 · 최고 화질 (자동)","Save video · Highest quality (Auto)","動画を保存 · 最高画質（自動）"):UiText.F("영상 저장 · 최대 {0}p","Save video · Up to {0}p","動画を保存 · 最大 {0}p",height),FileName=DownloadService.SuggestedName(video),Filter=UiText.T("영상 파일 (*.mkv)|*.mkv","Video files (*.mkv)|*.mkv","動画ファイル (*.mkv)|*.mkv"),DefaultExt=".mkv",AddExtension=true,OverwritePrompt=true};
         if(dialog.ShowDialog(this)!=true)return;
         _downloadTask=DownloadCurrentAsync(video,height,dialog.FileName);await _downloadTask;

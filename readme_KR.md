@@ -15,6 +15,8 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 *계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
 
+1.1.2 다운로드·설치·소스 접근은 [배포 안내](docs/RELEASE-1.1.2.md)와 [사용법·제한](docs/FEATURES-1.1.2.md)을 확인하세요. 아래 1.1 배포·검증 기록은 해당 과거 버전의 기록입니다.
+
 <!-- PUBLICATION-STATUS-BEGIN -->
 > **1.1 배포 파일·검증 범위**
 > **[릴리스 파일과 접근 상태: FK_YT v1.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1)** 다운로드한 파일은 [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt)와 비교하세요. 설치·설치 후 실행과 재생·설치기 업데이트·제거는 **Windows 10/11에서 검증됐습니다**(제작자 확인, 2026-10-17). 설치 시간은 별도로 측정하지 않았습니다. [파일·검증 범위](docs/RELEASE-1.1.md), [1.1 변경 내용](docs/FEATURES-1.1.md), [라이선스 점검 기록](docs/LICENSING-1.1.md)을 확인해 주세요.

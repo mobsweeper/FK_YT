@@ -116,6 +116,9 @@ public partial class MainWindow
         share.Click += Share_Click;
         toolbar.Children.Add(share);
         var subtitles = PopoutButton(UiText.T("자막 ▾","Subtitles ▾","字幕 ▾"));
+        subtitles.SetBinding(IsEnabledProperty,new Binding(nameof(SubtitleButton.IsEnabled)){Source=SubtitleButton});
+        subtitles.SetBinding(ToolTipProperty,new Binding(nameof(SubtitleButton.ToolTip)){Source=SubtitleButton});
+        ToolTipService.SetShowOnDisabled(subtitles,true);
         subtitles.Click += Subtitles_Click;
         toolbar.Children.Add(subtitles);
         var pin = new CheckBox { Content = UiText.T("항상 위","Always on top","常に手前に表示"), VerticalAlignment = VerticalAlignment.Center,

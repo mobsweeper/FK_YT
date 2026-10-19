@@ -41,6 +41,7 @@ public partial class App : Application
             }
             // Freeze the verified local tool selection before constructing services
             // or starting any worker. Startup does not check for online updates.
+            await Playback.LiveFromStartTransport.CleanupStaleAsync(paths);
             await paths.InitializeToolchainAsync();
             if(_startup.Failed)return;
             var window=new MainWindow(paths);MainWindow=window;window.Show();

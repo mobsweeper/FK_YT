@@ -282,6 +282,15 @@ public sealed class YouTubeService
         var height=NormalizeMaxHeight(maxHeight);
         return height==0?"bv*+ba/b":$"bv*[height<={height}]+ba/b[height<={height}]";
     }
+    // worst reverses yt-dlp's language preference, so select original audio
+    // explicitly before applying the forced height sort to muxed renditions.
+    // If the extractor cannot identify an original, retain compatibility fallback.
+    internal static string PlaybackFormat(int maxHeight,bool audioOnly)=>audioOnly
+        ?"bestaudio[language_preference=10]/worst[vcodec!=none][acodec!=none][vcodec!=images][acodec!=images][height>0][height<=16384][language_preference=10]/bestaudio/worst[vcodec!=none][acodec!=none][vcodec!=images][acodec!=images][height>0][height<=16384]":VideoFormat(maxHeight);
+    private static void AddAudioFormatSort(List<string> args,bool audioOnly)
+    {
+        if(audioOnly)args.AddRange(["--format-sort","height","--format-sort-force"]);
+    }
     public static bool TrySubtitleCatalogUrl(string? input,out string canonical)
     {
         canonical="";
@@ -547,34 +556,43 @@ public sealed class YouTubeService
         return resolution.Live??throw UnsupportedLiveMedia();
     }
 
-    public async Task<PlaybackResolution> ResolvePlaybackAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null)
+    public async Task<PlaybackResolution> ResolvePlaybackAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null,bool audioOnly=false,bool liveFromStart=false)
     {
         ct.ThrowIfCancellationRequested();
         if(!TryVideoUrl(url,out var videoId,out var canonical))throw InvalidMetadata();
         using var lease=incognito?new CookieLease(null):_session.Acquire();
         var channel=incognito?null:_session.SelectedChannel;
         var args=BaseArguments(lease.Path,channel);
-        // Retain the existing VOD selection. A live rendition is selected from
-        // this same verified response's complete, yt-dlp ordered format catalog.
-        args.AddRange(["--no-write-comments","--simulate","--no-live-from-start","--no-check-formats","--ignore-no-formats-error",
-            "--write-subs","--write-auto-subs","--sub-langs",PreferredSubtitlePattern(subtitleLanguage),"--sub-format","vtt/best",
-            "--format",VideoFormat(maxHeight),"--dump-single-json",canonical]);
+        // A live rendition is selected from the same verified response's full
+        // catalog, even when the saved VOD preference requests bestaudio.
+        args.AddRange(["--no-write-comments","--simulate","--no-live-from-start","--ignore-no-formats-error",
+            "--format",PlaybackFormat(maxHeight,audioOnly)]);
+        AddAudioFormatSort(args,audioOnly);
+        // Audio selection keeps yt-dlp's default probes for formats flagged by
+        // the extractor, so an unavailable audio/low muxed format can be skipped.
+        if(!audioOnly)args.AddRange(["--no-check-formats","--write-subs","--write-auto-subs","--sub-langs",PreferredSubtitlePattern(subtitleLanguage),"--sub-format","vtt/best"]);
+        args.AddRange(["--dump-single-json",canonical]);
         var result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(70),ct,lease:lease);
         if(result.ExitCode!=0)throw new YouTubeAccessException(ProcessRunner.ClassifyError(result.Error),lease.Path is not null);
         try
         {
             using var doc=JsonDocument.Parse(result.Output);
-            ParsePlaybackStatus(doc.RootElement,videoId);
-            return ParsePlaybackResolution(doc.RootElement,maxHeight);
+            var status=ParsePlaybackStatus(doc.RootElement,videoId);
+            // From-start playback is consumed by owned native fragment workers.
+            // It need not have a muxed HLS rendition, and no fragment URL or
+            // executable generator is serialized into a prepared-media record.
+            if(liveFromStart && status.IsLive)return new(status,null,null);
+            return ParsePlaybackResolution(doc.RootElement,maxHeight,audioOnly);
         }
         catch(JsonException){throw InvalidMetadata();}
     }
 
-    public static PlaybackResolution ParsePlaybackResolution(JsonElement video,int maxHeight=0)
+    public static PlaybackResolution ParsePlaybackResolution(JsonElement video,int maxHeight=0,bool audioOnly=false)
     {
         var status=ParsePlaybackStatus(video);
         if(status.IsUpcoming || status.LiveStatus=="post_live")return new(status,null,null);
-        if(!status.IsLive)return new(status,ParsePreparedVideo(video),null);
+        if(audioOnly && status.LiveStatus=="unknown")throw InvalidMetadata();
+        if(!status.IsLive)return new(status,ParsePreparedVideo(video,audioOnly),null);
         var height=NormalizeMaxHeight(maxHeight);
         if(video.TryGetProperty("formats",out var formats) && formats.ValueKind==JsonValueKind.Array)
         {
@@ -587,11 +605,13 @@ public sealed class YouTubeService
                 var candidate=new Dictionary<string,object?>
                 {
                     ["id"]=status.VideoId,["live_status"]="is_live",["is_live"]=true,
-                    ["requested_formats"]=new[]{format},["formats"]=formats
+                    ["requested_formats"]=new[]{format}
                 };
                 foreach(var field in new[]{"http_headers","requested_subtitles","has_drm"})
                     if(video.TryGetProperty(field,out var value))candidate[field]=value;
-                try{return new(status,null,ParseLiveHlsMedia(JsonSerializer.SerializeToElement(candidate)));}
+                // The catalog is only read after a candidate passes validation;
+                // keep it separate to avoid copying every rendition on retry.
+                try{return new(status,null,ParseLiveHlsMediaCore(JsonSerializer.SerializeToElement(candidate),formats));}
                 catch(InvalidDataException){/* Try the next complete supported HLS rendition. */}
             }
             throw UnsupportedLiveMedia();
@@ -603,7 +623,9 @@ public sealed class YouTubeService
         return new(status,null,single);
     }
 
-    public static LiveHlsMedia ParseLiveHlsMedia(JsonElement video)
+    public static LiveHlsMedia ParseLiveHlsMedia(JsonElement video)=>ParseLiveHlsMediaCore(video);
+
+    private static LiveHlsMedia ParseLiveHlsMediaCore(JsonElement video,JsonElement catalog=default)
     {
         var status=ParsePlaybackStatus(video);
         if(!status.IsLive)throw UnsupportedLiveMedia();
@@ -644,8 +666,9 @@ public sealed class YouTubeService
                 resolutions.Add(pixels);
         }
         AddResolution(format);
-        if(video.TryGetProperty("formats",out var formats) && formats.ValueKind==JsonValueKind.Array)
-            foreach(var item in formats.EnumerateArray())if(item.ValueKind==JsonValueKind.Object &&
+        if(catalog.ValueKind==JsonValueKind.Undefined && video.TryGetProperty("formats",out var formats))catalog=formats;
+        if(catalog.ValueKind==JsonValueKind.Array)
+            foreach(var item in catalog.EnumerateArray())if(item.ValueKind==JsonValueKind.Object &&
                 (!item.TryGetProperty("has_drm",out var drm) || drm.ValueKind is JsonValueKind.False or JsonValueKind.Null))AddResolution(item);
         var captions=new List<PreparedCaption>();
         if(video.TryGetProperty("requested_subtitles",out var subs) && subs.ValueKind==JsonValueKind.Object)
@@ -674,16 +697,17 @@ public sealed class YouTubeService
         name.Equals("Accept",StringComparison.OrdinalIgnoreCase) || name.Equals("Accept-Language",StringComparison.OrdinalIgnoreCase) || name.Equals("Sec-Fetch-Mode",StringComparison.OrdinalIgnoreCase);
     private static InvalidDataException UnsupportedLiveMedia()=>new(UiText.T("이 라이브의 전송 형식은 아직 지원하지 않습니다. 단일 HLS 영상·음성 스트림이 필요합니다.","This live transport is not supported yet. A single muxed HLS stream is required.","このライブ配信形式にはまだ対応していません。映像と音声を含む単一 HLS ストリームが必要です。"));
 
-    public async Task<PreparedVideo> ResolveNextAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null)
+    public async Task<PreparedVideo> ResolveNextAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null,bool audioOnly=false)
     {
         ct.ThrowIfCancellationRequested();
         if(!TryVideoUrl(url,out _,out var canonical))throw new InvalidDataException(UiText.T("지원되지 않는 영상 주소입니다.","This video URL is not supported.","この動画 URL はサポートされていません。"));
-        var subtitles=PreferredSubtitlePattern(subtitleLanguage);
         using var lease=incognito?new CookieLease(null):_session.Acquire();
         var channel=incognito?null:_session.SelectedChannel;
         var args=BaseArguments(lease.Path,channel);
-        var format=VideoFormat(maxHeight);
-        args.AddRange(["--no-write-comments","--simulate","--write-subs","--write-auto-subs","--sub-langs",subtitles,"--sub-format","vtt/best","--format",format,"--dump-single-json",canonical]);
+        args.AddRange(["--no-write-comments","--simulate","--format",PlaybackFormat(maxHeight,audioOnly)]);
+        AddAudioFormatSort(args,audioOnly);
+        if(!audioOnly)args.AddRange(["--write-subs","--write-auto-subs","--sub-langs",PreferredSubtitlePattern(subtitleLanguage),"--sub-format","vtt/best"]);
+        args.AddRange(["--dump-single-json",canonical]);
         CommandResult result;
         try{result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(70),ct,lease:lease);}
         catch(IOException ex)when(ex.InnerException is TimeoutException){throw new YouTubeAccessException("network",lease.Path is not null);}
@@ -691,11 +715,12 @@ public sealed class YouTubeService
         try
         {
             using var doc=JsonDocument.Parse(result.Output);
-            return ParsePreparedVideo(doc.RootElement);
+            return ParsePreparedVideo(doc.RootElement,audioOnly);
         }
         catch(JsonException){throw InvalidMetadata();}
     }
-    public static PreparedVideo ParsePreparedVideo(JsonElement video)
+    public static PreparedVideo ParsePreparedVideo(JsonElement video)=>ParsePreparedVideo(video,false);
+    public static PreparedVideo ParsePreparedVideo(JsonElement video,bool audioOnly)
     {
         RequireObject(video);
         // Keep the direct HTTP/EDL path; only the pinned extractor's selected,
@@ -704,8 +729,13 @@ public sealed class YouTubeService
         if(video.TryGetProperty("requested_formats",out var requestedFormats)&&requestedFormats.ValueKind!=JsonValueKind.Array)throw InvalidMetadata();
         var formats=video.TryGetProperty("requested_formats",out var requested)?requested.EnumerateArray().Take(3).ToArray():[video];
         if(formats.Length is <1 or >2)throw new InvalidDataException(UiText.T("지원되지 않는 스트림 조합입니다.","This stream combination is not supported.","このストリームの組み合わせはサポートされていません。"));
+        if(audioOnly && ParsePlaybackStatus(video).LiveStatus is not ("not_live" or "was_live"))throw InvalidMetadata();
+        if(audioOnly && (HasFailedFormatProbe(video) || formats.Any(HasFailedFormatProbe)))throw InvalidMetadata();
+        if(audioOnly && HasOriginalAudioFormat(video) && formats.Any(format=>!IsOriginalAudioFormat(format)))throw InvalidMetadata();
+        var audioOnlyStream=audioOnly && formats.Length==1 && IsAudioOnlyFormat(formats[0]);
+        if(audioOnly && !audioOnlyStream && !IsAudioMuxedFallback(video,formats))throw new InvalidDataException(UiText.T("오디오 재생에 사용할 스트림을 확인하지 못했습니다.","Could not verify a stream for audio playback.","音声再生に使用するストリームを確認できませんでした。"));
         var isHls=IsPreparedHls(video)||formats.Any(IsPreparedHls);
-        if(isHls)ValidatePreparedHls(video,formats);
+        if(isHls)ValidatePreparedHls(video,formats,audioOnlyStream);
         var urls=new List<string>();var headers=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);int? httpChunkSize=null;
         foreach(var format in formats)
         {
@@ -737,18 +767,83 @@ public sealed class YouTubeService
             }
         }
         var captions=new List<PreparedCaption>();
-        if(video.TryGetProperty("requested_subtitles",out var subs) && subs.ValueKind==JsonValueKind.Object)
+        if(!audioOnly && video.TryGetProperty("requested_subtitles",out var subs) && subs.ValueKind==JsonValueKind.Object)
             foreach(var entry in subs.EnumerateObject().Take(8))
                 if(IsValidSubtitleLanguage(entry.Name) && entry.Value.ValueKind==JsonValueKind.Object && entry.Value.TryGetProperty("url",out var captionUrl) &&
                     captionUrl.ValueKind==JsonValueKind.String && TrySubtitleCatalogUrl(captionUrl.GetString(),out _))
                     captions.Add(new(entry.Name,captionUrl.GetString()!));
-        return new(Playback.MpvPreparedMedia.BuildEdlUrl(urls),headers,ParseResolutions(video),captions,httpChunkSize);
+        return new(Playback.MpvPreparedMedia.BuildEdlUrl(urls),headers,audioOnly?Array.Empty<int>():ParseResolutions(video),captions,httpChunkSize){AudioOnly=audioOnly};
+    }
+    private static bool IsAudioOnlyFormat(JsonElement format)=>format.ValueKind==JsonValueKind.Object &&
+        format.TryGetProperty("vcodec",out var videoCodec) && videoCodec.ValueKind==JsonValueKind.String && videoCodec.GetString()=="none" &&
+        format.TryGetProperty("acodec",out var audioCodec) && audioCodec.ValueKind==JsonValueKind.String &&
+        audioCodec.GetString() is {} text && text.Length is >=1 and <=128 && text is not ("none" or "images") &&
+        text.All(character=>char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_');
+    private static bool HasFailedFormatProbe(JsonElement format)=>format.ValueKind==JsonValueKind.Object &&
+        format.TryGetProperty("__working",out var working) && working.ValueKind==JsonValueKind.False;
+    private static bool IsOriginalAudioFormat(JsonElement format)=>format.ValueKind==JsonValueKind.Object &&
+        format.TryGetProperty("language_preference",out var language) && language.ValueKind==JsonValueKind.Number &&
+        language.TryGetInt32(out var preference) && preference==10;
+    private static bool HasOriginalAudioFormat(JsonElement video)=>video.TryGetProperty("formats",out var catalog) && catalog.ValueKind==JsonValueKind.Array &&
+        catalog.EnumerateArray().Any(format=>!HasFailedFormatProbe(format) && IsOriginalAudioFormat(format) &&
+            (IsAudioOnlyFormat(format) || TryMuxedVideoHeight(format,out _)));
+    private static bool IsAudioMuxedFallback(JsonElement video,IReadOnlyList<JsonElement> selected)
+    {
+        // The selected account's full catalog is authoritative. Never turn an
+        // arbitrary muxed URL or a split selection into an audio fallback.
+        if(selected.Count!=1 || !TryMuxedVideoHeight(selected[0],out var height) ||
+            !video.TryGetProperty("formats",out var catalog) || catalog.ValueKind!=JsonValueKind.Array)return false;
+        var originalOnly=IsOriginalAudioFormat(selected[0]) || HasOriginalAudioFormat(video);
+        if(originalOnly && !IsOriginalAudioFormat(selected[0]))return false;
+        var status=ParsePlaybackStatus(video).LiveStatus;
+        if(!IsConsistentVodFormat(video,status) || !IsConsistentVodFormat(selected[0],status))return false;
+        var matched=false;
+        foreach(var candidate in catalog.EnumerateArray())
+        {
+            // Only the pinned extractor's explicit failed-probe result proves
+            // unavailability. Missing, unknown or malformed flags remain blockers.
+            if(HasFailedFormatProbe(candidate))continue;
+            // A dubbed audio stream or lower dubbed rendition cannot displace
+            // the original; the catalog identity match must also be original.
+            if(originalOnly && !IsOriginalAudioFormat(candidate))continue;
+            if(IsAudioOnlyFormat(candidate))return false;
+            if(!TryMuxedVideoHeight(candidate,out var candidateHeight))continue;
+            if(candidateHeight<height)return false;
+            if(candidateHeight!=height || !IsConsistentVodFormat(candidate,status))continue;
+            var same=true;
+            foreach(var field in new[]{"format_id","url","protocol","vcodec","acodec"})
+                if(!selected[0].TryGetProperty(field,out var chosen) || chosen.ValueKind!=JsonValueKind.String || string.IsNullOrEmpty(chosen.GetString()) ||
+                    !candidate.TryGetProperty(field,out var available) || available.ValueKind!=JsonValueKind.String || chosen.GetString()!=available.GetString())
+                    {same=false;break;}
+            if(!same)continue;
+            if(IsPreparedHls(selected[0]) &&
+                (!selected[0].TryGetProperty("manifest_url",out var chosenManifest) || chosenManifest.ValueKind!=JsonValueKind.String ||
+                 !candidate.TryGetProperty("manifest_url",out var availableManifest) || availableManifest.ValueKind!=JsonValueKind.String ||
+                 chosenManifest.GetString()!=availableManifest.GetString()))continue;
+            matched=true;
+        }
+        return matched;
+    }
+    private static bool TryMuxedVideoHeight(JsonElement format,out int pixels)
+    {
+        pixels=0;
+        return HasMuxedCodecs(format) && format.TryGetProperty("height",out var height) && height.ValueKind==JsonValueKind.Number &&
+            height.TryGetInt32(out pixels) && pixels is >0 and <=16384;
+    }
+    private static bool IsConsistentVodFormat(JsonElement format,string status)
+    {
+        if(format.ValueKind!=JsonValueKind.Object || status is not ("not_live" or "was_live"))return false;
+        if(format.TryGetProperty("has_drm",out var drm) && drm.ValueKind is not (JsonValueKind.False or JsonValueKind.Null))return false;
+        if(format.TryGetProperty("is_live",out var live) && live.ValueKind!=JsonValueKind.False)return false;
+        if(format.TryGetProperty("live_status",out var suppliedStatus) &&
+            (suppliedStatus.ValueKind!=JsonValueKind.String || suppliedStatus.GetString()!=status))return false;
+        return !format.TryGetProperty("was_live",out var wasLive) || wasLive.ValueKind==(status=="was_live"?JsonValueKind.True:JsonValueKind.False);
     }
     private static bool IsPreparedHeaderName(string name)=>name.Length is >0 and <=128 &&
         name.All(character=>char.IsAsciiLetterOrDigit(character)||"!#$%&'*+-.^_`|~".Contains(character));
     private static bool IsPreparedHls(JsonElement value)=>value.ValueKind==JsonValueKind.Object &&
         value.TryGetProperty("protocol",out var protocol) && protocol.ValueKind==JsonValueKind.String && protocol.GetString() is "m3u8" or "m3u8_native";
-    private static void ValidatePreparedHls(JsonElement video,IReadOnlyList<JsonElement> formats)
+    private static void ValidatePreparedHls(JsonElement video,IReadOnlyList<JsonElement> formats,bool audioOnly=false)
     {
         // A selected account must keep its resolved rendition. A master playlist,
         // live stream, split HLS pair or unknown transport must not reselect media.
@@ -757,10 +852,10 @@ public sealed class YouTubeService
             !video.TryGetProperty("is_live",out var live) || live.ValueKind!=JsonValueKind.False ||
             !video.TryGetProperty("live_status",out var status) || status.ValueKind!=JsonValueKind.String || status.GetString()!="not_live")throw InvalidMetadata();
         var format=formats[0];
-        foreach(var codecName in new[]{"vcodec","acodec"})
+        foreach(var codecName in audioOnly?new[]{"acodec"}:new[]{"vcodec","acodec"})
             if(!format.TryGetProperty(codecName,out var codec) || codec.ValueKind!=JsonValueKind.String ||
                 string.IsNullOrWhiteSpace(codec.GetString()) || codec.GetString() is "none" or "images")throw InvalidMetadata();
-        if(!format.TryGetProperty("height",out var height) || height.ValueKind!=JsonValueKind.Number || !height.TryGetInt32(out var pixels) || pixels is <=0 or >16384 ||
+        if(!audioOnly && (!format.TryGetProperty("height",out var height) || height.ValueKind!=JsonValueKind.Number || !height.TryGetInt32(out var pixels) || pixels is <=0 or >16384) ||
             !TryPreparedHlsUrl(format,"url","hls_playlist",out _) || !TryPreparedHlsUrl(format,"manifest_url","hls_variant",out _))throw InvalidMetadata();
         foreach(var metadata in new[]{video,format})
         {
@@ -827,6 +922,7 @@ public sealed record PlaybackResolution(PlaybackStatus Status,PreparedVideo? Vod
 public sealed record LiveHlsMedia(string VideoId,string MediaUrl,IReadOnlyDictionary<string,string> Headers,IReadOnlyList<int> Resolutions,IReadOnlyList<PreparedCaption> Captions);
 public sealed record PreparedVideo(string MediaUrl,IReadOnlyDictionary<string,string> Headers,IReadOnlyList<int> Resolutions,IReadOnlyList<PreparedCaption> Captions,int? HttpChunkSize=null)
 {
+    public bool AudioOnly {get;init;}
     // App policy: accept the pinned extractor's 10 MiB limit, bounded to 64 MiB.
     public const int MaxHttpChunkSize=64*1024*1024;
 }

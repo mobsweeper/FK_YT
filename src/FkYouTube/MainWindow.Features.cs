@@ -9,10 +9,69 @@ namespace FkYouTube;
 public partial class MainWindow
 {
     private Func<string>? _qualityUiText;
+    private int _activePlaybackMaxHeight;
+    private bool _liveQualityDeferred;
+    private int _failedLiveFromStartGeneration=-1;
     private void SetQualityUiText(Func<string> text)
     { _qualityUiText=text;QualityState.Text=text(); }
+    private static string QualityCapText(int height)=>height==0
+        ?UiText.T("최고 화질 (자동)","Highest quality (Auto)","最高画質（自動）")
+        :UiText.F("최대 {0}p","Up to {0}p","最大 {0}p",height);
+    private void RefreshQualitySelectionText()
+    {
+        if(_liveFromStartPlayback && _failedLiveFromStartGeneration==_videoGeneration)
+            SetQualityUiText(()=>UiText.F("저장됨: {0} · 영상을 다시 열면 적용", "Saved: {0} · Reopen the video to apply", "保存済み: {0}・動画を開き直すと適用",
+                QualityCapText(_settings.MaxHeight)));
+        else if(_liveQualityDeferred)
+            SetQualityUiText(()=>UiText.F("현재 상한: {0} · 다음 재생: {1}","Current cap: {0} · Next playback: {1}","現在の上限: {0}・次の再生: {1}",
+                QualityCapText(_activePlaybackMaxHeight),QualityCapText(_settings.MaxHeight)));
+        else SetQualityUiText(()=>QualityCombo.Visibility==Visibility.Visible && QualityCombo.SelectedItem is not null?"":QualityCapText(_settings.MaxHeight));
+    }
+    private bool ClearDeferredLiveQuality()
+    {
+        // A failed-load notice can exist without a deferred quality selection.
+        var hadFailureNotice=_failedLiveFromStartGeneration>=0;
+        _failedLiveFromStartGeneration=-1;
+        if(!_liveQualityDeferred && !hadFailureNotice)return false;
+        _liveQualityDeferred=false;SetQualityUiText(()=>"");
+        return true;
+    }
     private void RefreshFeatureUiText()
-    { if(_qualityUiText is {} text)QualityState.Text=text();RefreshDownloadUiText(); }
+    { if(_qualityUiText is {} text)QualityState.Text=text();RefreshAudioPlaybackUi();RefreshDownloadUiText(); }
+
+    private bool _updatingAudioOnly;
+    private int _audioPreferenceRevision;
+    private async void AudioOnly_Changed(object sender,RoutedEventArgs e)
+    {
+        if(!_ready || _updatingAudioOnly || AccountWorkBlocked)return;
+        var previous=_settings.AudioOnly;
+        _settings.AudioOnly=AudioOnlyCheck.IsChecked==true;
+        if(!TrySaveSettings())
+        {
+            _settings.AudioOnly=previous;_updatingAudioOnly=true;
+            try{AudioOnlyCheck.IsChecked=previous;}finally{_updatingAudioOnly=false;}
+            return;
+        }
+        var revision=++_audioPreferenceRevision;
+        // This preference only invalidates future media. Keep current playback,
+        // subtitle operations, and active controls in their existing mode.
+        _prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;
+        _preparedResolutions=[];_preparedCaptions=[];SetPrefetchUiText(()=>"");
+        await ClearPrefetchSafelyAsync();
+        if(revision==_audioPreferenceRevision && !_closing)await EnsurePrefetchAsync();
+    }
+
+    private void RefreshAudioPlaybackUi()
+    {
+        SubtitleButton.IsEnabled=!_activeAudioOnly;
+        SubtitleButton.ToolTip=_activeAudioOnly
+            ?UiText.T("오디오 전용 재생에서는 자막을 사용하지 않습니다.","Subtitles are unavailable during audio-only playback.","音声のみの再生では字幕を使用しません。")
+            :_subtitleToolTipText?.Invoke()??UiText.T("자막 목록에서 언어를 선택하거나 자막을 끕니다.","Choose a subtitle language or turn subtitles off.","字幕の言語を選択するか、字幕をオフにします。");
+        if(!_activeAudioOnly)return;
+        QualityCombo.IsDropDownOpen=false;QualityCombo.IsEnabled=false;QualityCombo.Visibility=Visibility.Collapsed;
+        QualityLoadButton.Visibility=Visibility.Collapsed;
+        SetQualityUiText(()=>UiText.T("오디오 전용","Audio only","音声のみ"));
+    }
 
     private CookieLease AcquirePlaybackSession()=>_settings.Incognito?new CookieLease(null):_session.Acquire();
 
@@ -125,20 +184,22 @@ public partial class MainWindow
 
     private void ResetQualityDisplay(VideoItem item)
     {
+        if(_activeAudioOnly){RefreshAudioPlaybackUi();return;}
         if(_qualityKey==$"{_settings.AccountKey}:{_settings.Incognito}:{item.Id}" && _resolutions.Count>0){DisplayResolutions();return;}
         _updatingQuality=true;QualityCombo.ItemsSource=null;QualityCombo.IsEnabled=false;_updatingQuality=false;
         QualityCombo.Visibility=Visibility.Collapsed;QualityLoadButton.Visibility=Visibility.Visible;QualityLoadButton.IsEnabled=true;
-        SetQualityUiText(()=>_settings.MaxHeight==0?UiText.T("최고 화질 (자동)","Highest quality (Auto)","最高画質（自動）"):UiText.F("최대 {0}p","Up to {0}p","最大 {0}p",_settings.MaxHeight));
+        RefreshQualitySelectionText();
     }
     private async void QualityLoad_Click(object sender,RoutedEventArgs e)
     {
-        if(AccountWorkBlocked || _current==null || _qualityCts is {IsCancellationRequested:false})return;
+        if(AccountWorkBlocked || _activeAudioOnly || _current==null || _qualityCts is {IsCancellationRequested:false})return;
         var generation=_videoMetadataGeneration;
         await LoadResolutionsAsync(_current,generation);
         if(!_closing && generation==_videoMetadataGeneration && QualityCombo.IsEnabled)QualityCombo.IsDropDownOpen=true;
     }
     private async Task LoadResolutionsAsync(VideoItem item,int generation)
     {
+        if(_activeAudioOnly)return;
         using var readLifetime=BeginAccountRead();
         var key=$"{_settings.AccountKey}:{_settings.Incognito}:{item.Id}";
         if(key==_qualityKey && _resolutions.Count>0){DisplayResolutions();return;}
@@ -147,7 +208,7 @@ public partial class MainWindow
         try
         {
             var resolutions=await _youtube.GetResolutionsAsync(item.Url,cts.Token,_settings.Incognito);
-            if(_closing || cts.IsCancellationRequested || generation!=_videoMetadataGeneration)return;
+            if(_closing || _activeAudioOnly || cts.IsCancellationRequested || generation!=_videoMetadataGeneration)return;
             _qualityKey=key;_resolutions=resolutions;DisplayResolutions();
         }
         catch(OperationCanceledException){}
@@ -157,6 +218,7 @@ public partial class MainWindow
     }
     private void DisplayResolutions()
     {
+        if(_activeAudioOnly){RefreshAudioPlaybackUi();return;}
         _updatingQuality=true;
         try
         {
@@ -164,8 +226,8 @@ public partial class MainWindow
             if(_resolutions.Count>0)
             {
                 QualityCombo.SelectedItem=_settings.MaxHeight==0?0:_resolutions.Where(h=>h<=_settings.MaxHeight).Select(h=>(int?)h).Max();
-                SetQualityUiText(()=>QualityCombo.SelectedItem is null?UiText.F("최대 {0}p","Up to {0}p","最大 {0}p",_settings.MaxHeight):"");QualityCombo.IsEnabled=true;
                 QualityCombo.Visibility=Visibility.Visible;QualityLoadButton.Visibility=Visibility.Collapsed;
+                RefreshQualitySelectionText();QualityCombo.IsEnabled=true;
             }
             else{SetQualityUiText(()=>UiText.T("제공되는 영상 화질 정보 없음","No video quality information available","利用できる画質情報がありません"));QualityCombo.IsEnabled=false;}
         }
