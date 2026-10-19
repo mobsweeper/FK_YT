@@ -311,9 +311,9 @@ The source collections' distributor metadata and broken links were repaired, and
 | --- | --- |
 | Writing the code | Delegated to AI |
 | Writing this README | Also delegated to AI |
-| Estimated debugging reviews delegated to agents | **About 195** |
+| Estimated debugging reviews delegated to agents | **About 330** |
 | Certified bug-free | Absolutely not |
 
-Based on **13 parallel review rounds × 15 review assignments**, checked on October 17, 2026. Repeat assignments to the same agents count; the main agent's own checks, separate external reviews, and individual follow-up questions do not. That's not 195 different AI models, and definitely not a claim of 195 bugs fixed.
+Based on **22 completed parallel review rounds × 15 review assignments**, completed through October 19 and checked on October 20, 2026. Nine additional rounds (135 assignments) were added to the previous estimate of 195. Repeat assignments to the same agents count; retries of failed review requests, the main agent's own checks, separate external reviews, and individual follow-up questions do not. That's not 330 different AI models, and definitely not a claim of 330 bugs fixed.
 
 *This counts static code reviews only. Dynamic checks, including actual app execution and playback, could not be tallied.*
