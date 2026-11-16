@@ -71,7 +71,7 @@ public partial class MainWindow
                 try{await ApplyChannelCoreAsync(selected,original);return true;}
                 finally{SetAccountBusy(false);}
             }
-            else SetChannelReloadError(()=>UiText.T("저장된 채널을 찾지 못했습니다. 왼쪽에서 사용할 채널을 선택하세요.","The saved channel was not found. Select a channel on the left.","保存されたチャンネルが見つかりません。左側で使用するチャンネルを選択してください。"));
+            else SetChannelReloadError(()=>UiText.T("저장된 채널을 찾지 못했습니다. 왼쪽 사이드바에서 사용할 YouTube 채널을 선택하세요.","The saved channel was not found. Choose a YouTube channel in the left sidebar.","保存されたチャンネルが見つかりません。左のサイドバーで使用する YouTube チャンネルを選択してください。"));
         }
         catch(Exception ex)when(IsStorageError(ex) || ex is InvalidDataException or JsonException or Win32Exception or OperationCanceledException)
         {if(!_closing)SetChannelReloadError(()=>UiText.T("채널 목록을 확인하지 못했습니다. 로그인 연결 또는 채널 목록을 갱신하세요.","Could not check channels. Reconnect your account or refresh the channel list.","チャンネルを確認できませんでした。ログイン接続またはチャンネル一覧を更新してください。"));DisplaySelectedChannel();}
@@ -139,7 +139,7 @@ public partial class MainWindow
             _items.RemoveAll(IsDismissed);_rows.Clear();
             if(_playingListGeneration==_feedGeneration)_playingIndex=_current==null?-1:_items.FindIndex(video=>ReferenceEquals(video,_current));
             UpdateUpNext();
-            foreach(var video in _items){if(_rows.Count==0 || _rows[^1].Items.Count>=4)_rows.Add(new());_rows[^1].Items.Add(video);}
+            foreach(var video in _items)AppendFeedRowItem(video);
             ItemCount.Text=UiText.F("{0:N0}개","{0:N0} items","{0:N0} 件",_items.Count);
             SetStatus(()=>action=="not_interested"?UiText.T("관심 없음이 YouTube에 적용되었습니다.","Not interested was applied on YouTube.","YouTube に「興味なし」を適用しました。"):UiText.T("이 채널 추천 안 함이 YouTube에 적용되었습니다.","Don’t recommend channel was applied on YouTube.","YouTube に「チャンネルをおすすめに表示しない」を適用しました。"));
         }

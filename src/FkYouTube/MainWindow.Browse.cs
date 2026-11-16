@@ -57,7 +57,7 @@ public partial class MainWindow
            (string.IsNullOrWhiteSpace(item.ChannelId) || !YouTubeService.TryChannelUrl("https://www.youtube.com/channel/"+item.ChannelId,out url)))return;
         e.Handled=true;
         var view=++_viewGeneration;
-        if(!await StopPlaybackAsync())return;
+        if(!await PrepareMainNavigationAsync())return;
         if(AccountWorkBlocked || view!=_viewGeneration)return;
         await OpenFeedAsync(url,string.IsNullOrWhiteSpace(item.Channel)?UiText.T("채널 영상","Channel videos","チャンネルの動画"):UiText.F("{0} · 영상","{0} · Videos","{0} · 動画",item.Channel));
     }

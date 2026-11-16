@@ -155,13 +155,24 @@ def account_api_headers(ie, ytcfg, account_context, **kwargs):
     return ie.generate_api_headers(ytcfg=cfg, **kwargs)
 
 
-def selected_ydl_options(options, account_context):
+def selected_ydl_options(options, account_context, *, verified_playback=False):
     result = copy.deepcopy(options)
     account = validate_account_context(account_context)
     if account is None:
+        if verified_playback:
+            raise SessionError("auth")
         return result
     args = result.setdefault("extractor_args", {})
     youtube = args.setdefault("youtube", {})
+    if verified_playback:
+        # The native clients use the verified watch page's own account config.
+        # In particular, data_sync_id would hide a mismatch from yt-dlp.
+        youtube.pop("data_sync_id", None)
+        youtube.pop("player_client", None)
+        player_skip = [item for item in youtube.pop("player_skip", []) if item not in ("webpage", "configs")]
+        if player_skip:
+            youtube["player_skip"] = player_skip
+        return result
     youtube["data_sync_id"] = [account["dataSyncId"]]
     youtube["player_skip"] = list(dict.fromkeys([*youtube.get("player_skip", []), "webpage", "configs"]))
     # Preserve native authenticated/Premium clients and request Safari's muxed
@@ -172,7 +183,7 @@ def selected_ydl_options(options, account_context):
     return result
 
 
-def install_account_context(ie, account_context):
+def install_account_context(ie, account_context, *, verified_playback=False):
     """Patch only this extractor instance; ytcfg from other accounts cannot win."""
     account = validate_account_context(account_context)
     if account is None or getattr(ie, "_fk_account_context", None) == account:
@@ -187,6 +198,8 @@ def install_account_context(ie, account_context):
     original_cfg = ie.extract_ytcfg
 
     def headers(_self, *, ytcfg=None, **kwargs):
+        if verified_playback and not ie.is_authenticated:
+            raise SessionError("auth")
         delegated, user = parse_data_sync_id(account["dataSyncId"])
         kwargs.update(delegated_session_id=delegated or None, user_session_id=user,
                       session_index=account["authUser"])
@@ -209,8 +222,51 @@ def install_account_context(ie, account_context):
 
     ie.generate_api_headers = types.MethodType(headers, ie)
     ie._extract_context = types.MethodType(context, ie)
-    ie.extract_ytcfg = types.MethodType(extract_cfg, ie)
+    if not verified_playback:
+        ie.extract_ytcfg = types.MethodType(extract_cfg, ie)
     ie._fk_account_context = account
+    return ie
+
+
+def _matches_watch_account(cfg, account):
+    if not isinstance(cfg, dict) or cfg.get("LOGGED_IN") is not True:
+        return False
+    # Missing and false values cannot establish even the zero slot. The
+    # server's JSON may represent the slot as either a number or string.
+    slot = cfg.get("SESSION_INDEX")
+    return (cfg.get("DATASYNC_ID") == account["dataSyncId"]
+            and (type(slot) is int and slot == account["authUser"]
+                 or type(slot) is str and slot == str(account["authUser"])))
+
+
+def _install_verified_playback(ie, account):
+    if getattr(ie, "_fk_verified_playback", False):
+        return ie
+    original_webpage = ie._download_initial_webpage
+    original_client_config = ie._download_ytcfg
+    raw_config = ie.extract_ytcfg
+
+    def download_verified_webpage(_self, webpage_url, webpage_client, video_id):
+        webpage = original_webpage(webpage_url, webpage_client, video_id)
+        if not webpage:
+            raise SessionError("network")
+        # Reject before _initial_extract can read the attached player response
+        # or initial data. The raw extractor has no account-config wrapper.
+        if not ie.is_authenticated or not _matches_watch_account(raw_config(video_id, webpage), account):
+            raise SessionError("auth")
+        install_account_context(ie, account, verified_playback=True)
+        return webpage
+
+    def download_verified_client_config(_self, client, video_id):
+        cfg = original_client_config(client, video_id)
+        # Auxiliary pages (e.g. an embed) may omit account details. The
+        # underlying client can still use its built-in defaults and pinned
+        # API headers, without adopting state from that unverified page.
+        return cfg if _matches_watch_account(cfg, account) else {}
+
+    ie._download_initial_webpage = types.MethodType(download_verified_webpage, ie)
+    ie._download_ytcfg = types.MethodType(download_verified_client_config, ie)
+    ie._fk_verified_playback = True
     return ie
 
 
@@ -221,16 +277,21 @@ def _disable_external_plugins():
     plugin_dirs.value = []
 
 
-def create_youtube_dl(options, account_context=None):
+def create_youtube_dl(options, account_context=None, *, verified_playback=False):
     from yt_dlp import YoutubeDL
     _disable_external_plugins()
     account = validate_account_context(account_context)
 
     class ChannelYoutubeDL(YoutubeDL):
         def get_info_extractor(self, ie_key):
-            return install_account_context(super().get_info_extractor(ie_key), account)
+            ie = super().get_info_extractor(ie_key)
+            if verified_playback:
+                if ie_key != "Youtube":
+                    raise SessionError("unsupported")
+                return _install_verified_playback(ie, account)
+            return install_account_context(ie, account)
 
-    return ChannelYoutubeDL(selected_ydl_options(options, account))
+    return ChannelYoutubeDL(selected_ydl_options(options, account, verified_playback=verified_playback))
 
 
 def walk_objects(value, depth=0):
@@ -315,7 +376,7 @@ def parse_accounts(response, default_ytcfg):
     return channels
 
 
-def session_options(cookie_path):
+def require_cookie_lease(cookie_path):
     if not isinstance(cookie_path, str) or not cookie_path:
         raise SessionError("auth")
     source = Path(cookie_path).absolute()
@@ -326,6 +387,10 @@ def session_options(cookie_path):
             raise SessionError("unsupported")
     if not source.is_file():
         raise SessionError("auth")
+
+
+def session_options(cookie_path):
+    require_cookie_lease(cookie_path)
     return {"quiet": True, "logger": QuietLogger(), "noprogress": True,
             "cookiefile": cookie_path, "cachedir": False, "socket_timeout": 12,
             "retries": 0, "extractor_retries": 0, "mark_watched": False,

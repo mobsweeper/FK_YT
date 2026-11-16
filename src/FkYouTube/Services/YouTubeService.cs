@@ -137,10 +137,16 @@ public sealed class YouTubeService
         if(extractor.Length>0)args.AddRange(["--extractor-args",extractor]);
         if(cookiePath!=null){args.Add("--cookies");args.Add(cookiePath);}return args;
     }
-    private Task<CommandResult> RunYtDlpAsync(IReadOnlyList<string> args,YouTubeChannel? channel,TimeSpan timeout,CancellationToken ct,bool subtitleCatalog=false,CookieLease? lease=null)
+    private Task<CommandResult> RunYtDlpAsync(IReadOnlyList<string> args,YouTubeChannel? channel,TimeSpan timeout,CancellationToken ct,bool subtitleCatalog=false,CookieLease? lease=null,bool verifiedPlayback=false)
     {
         var receipt=new ProcessStopReceipt();lease?.AttachConsumer(receipt);
         var command=YouTubeAccountOptions.CreateCommand(_paths,args,channel);
+        if(verifiedPlayback)
+        {
+            if(channel is null)throw new InvalidOperationException("Verified playback requires a selected account.");
+            return ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","selected_ytdlp.py"),args),_paths.Root,timeout,ct,
+                JsonSerializer.Serialize(new{accountContext=channel,operation="verified_playback"},JsonDefaults.Options),receipt);
+        }
         if(subtitleCatalog)return ProcessRunner.RunAsync(_paths.Python,_paths.BuildPythonArguments(Path.Combine(_paths.Root,"worker","selected_ytdlp.py"),args),_paths.Root,timeout,ct,
             JsonSerializer.Serialize(new{accountContext=channel,operation="subtitle_catalog"},JsonDefaults.Options),receipt);
         return ProcessRunner.RunAsync(command.Executable,command.Arguments,_paths.Root,timeout,ct,command.StandardInput,receipt);
@@ -285,8 +291,15 @@ public sealed class YouTubeService
     // worst reverses yt-dlp's language preference, so select original audio
     // explicitly before applying the forced height sort to muxed renditions.
     // If the extractor cannot identify an original, retain compatibility fallback.
-    internal static string PlaybackFormat(int maxHeight,bool audioOnly)=>audioOnly
-        ?"bestaudio[language_preference=10]/worst[vcodec!=none][acodec!=none][vcodec!=images][acodec!=images][height>0][height<=16384][language_preference=10]/bestaudio/worst[vcodec!=none][acodec!=none][vcodec!=images][acodec!=images][height>0][height<=16384]":VideoFormat(maxHeight);
+    internal static string PlaybackFormat(int maxHeight,bool audioOnly)
+    {
+        if(audioOnly)return "bestaudio[language_preference=10]/worst[vcodec!=none][acodec!=none][vcodec!=images][acodec!=images][height>0][height<=16384][language_preference=10]/bestaudio/worst[vcodec!=none][acodec!=none][vcodec!=images][acodec!=images][height>0][height<=16384]";
+        var height=NormalizeMaxHeight(maxHeight);
+        var cap=height==0?"":$"[height<={height}]";
+        // The extractor can rank resolution or frame rate ahead of language.
+        // Try original audio with split or muxed video before compatibility playback.
+        return $"bv{cap}+ba[language_preference=10]/b{cap}[language_preference=10]/"+VideoFormat(maxHeight);
+    }
     private static void AddAudioFormatSort(List<string> args,bool audioOnly)
     {
         if(audioOnly)args.AddRange(["--format-sort","height","--format-sort-force"]);
@@ -556,12 +569,15 @@ public sealed class YouTubeService
         return resolution.Live??throw UnsupportedLiveMedia();
     }
 
-    public async Task<PlaybackResolution> ResolvePlaybackAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null,bool audioOnly=false,bool liveFromStart=false)
+    public async Task<PlaybackResolution> ResolvePlaybackAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null,bool audioOnly=false,bool liveFromStart=false,bool verifiedVod=false)
     {
         ct.ThrowIfCancellationRequested();
         if(!TryVideoUrl(url,out var videoId,out var canonical))throw InvalidMetadata();
         using var lease=incognito?new CookieLease(null):_session.Acquire();
         var channel=incognito?null:_session.SelectedChannel;
+        // From-start controls the transport only if this response is actually
+        // live. A stale status hint must not disable requested account checks.
+        var useVerifiedPlayback=verifiedVod && channel is not null && !audioOnly;
         var args=BaseArguments(lease.Path,channel);
         // A live rendition is selected from the same verified response's full
         // catalog, even when the saved VOD preference requests bestaudio.
@@ -572,7 +588,7 @@ public sealed class YouTubeService
         // the extractor, so an unavailable audio/low muxed format can be skipped.
         if(!audioOnly)args.AddRange(["--no-check-formats","--write-subs","--write-auto-subs","--sub-langs",PreferredSubtitlePattern(subtitleLanguage),"--sub-format","vtt/best"]);
         args.AddRange(["--dump-single-json",canonical]);
-        var result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(70),ct,lease:lease);
+        var result=await RunYtDlpAsync(args,channel,TimeSpan.FromSeconds(70),ct,lease:lease,verifiedPlayback:useVerifiedPlayback);
         if(result.ExitCode!=0)throw new YouTubeAccessException(ProcessRunner.ClassifyError(result.Error),lease.Path is not null);
         try
         {
@@ -582,16 +598,18 @@ public sealed class YouTubeService
             // It need not have a muxed HLS rendition, and no fragment URL or
             // executable generator is serialized into a prepared-media record.
             if(liveFromStart && status.IsLive)return new(status,null,null);
-            return ParsePlaybackResolution(doc.RootElement,maxHeight,audioOnly);
+            return ParsePlaybackResolution(doc.RootElement,maxHeight,audioOnly,useVerifiedPlayback);
         }
         catch(JsonException){throw InvalidMetadata();}
     }
 
-    public static PlaybackResolution ParsePlaybackResolution(JsonElement video,int maxHeight=0,bool audioOnly=false)
+    public static PlaybackResolution ParsePlaybackResolution(JsonElement video,int maxHeight=0,bool audioOnly=false,bool preferVerifiedHls=false)
     {
         var status=ParsePlaybackStatus(video);
         if(status.IsUpcoming || status.LiveStatus=="post_live")return new(status,null,null);
         if(audioOnly && status.LiveStatus=="unknown")throw InvalidMetadata();
+        if(preferVerifiedHls && !audioOnly && status.LiveStatus=="not_live" && TryVerifiedHlsVod(video,maxHeight,out var verifiedVod))
+            return new(status,verifiedVod,null);
         if(!status.IsLive)return new(status,ParsePreparedVideo(video,audioOnly),null);
         var height=NormalizeMaxHeight(maxHeight);
         if(video.TryGetProperty("formats",out var formats) && formats.ValueKind==JsonValueKind.Array)
@@ -621,6 +639,40 @@ public sealed class YouTubeService
         var selected=video.TryGetProperty("requested_formats",out var chosen)?chosen[0]:video;
         if(height>0 && selected.GetProperty("height").GetInt32()>height)throw UnsupportedLiveMedia();
         return new(status,null,single);
+    }
+
+    // Use only renditions in this account-verified response. No second extraction,
+    // cookie change, guest retry, master-playlist reselection or format probing.
+    private static bool TryVerifiedHlsVod(JsonElement video,int maxHeight,out PreparedVideo? result)
+    {
+        result=null;
+        if(!video.TryGetProperty("is_live",out var actualLive) || actualLive.ValueKind!=JsonValueKind.False ||
+            !video.TryGetProperty("formats",out var catalog) || catalog.ValueKind!=JsonValueKind.Array)return false;
+        var cap=NormalizeMaxHeight(maxHeight);
+        var originalOnly=HasOriginalAudioFormat(video);
+        var candidates=new List<(int Height,PreparedVideo Media)>();
+        // yt-dlp orders formats from least to most preferred. Keep its highest
+        // rank first for a height tie; the height cap and height sort still win.
+        foreach(var format in catalog.EnumerateArray().Reverse())
+        {
+            if(HasFailedFormatProbe(format) || (originalOnly && !IsOriginalAudioFormat(format)) ||
+                !IsPreparedHls(format) || !HasMuxedCodecs(format) || !format.TryGetProperty("height",out var pixels) ||
+                pixels.ValueKind!=JsonValueKind.Number || !pixels.TryGetInt32(out var height) || height is <=0 or >16384)continue;
+            var candidate=new Dictionary<string,object?>
+            {
+                ["id"]=video.GetProperty("id"),["live_status"]="not_live",["is_live"]=false,
+                ["requested_formats"]=new[]{format}
+            };
+            // Retain top-level security metadata for the existing strict parser.
+            foreach(var field in new[]{"http_headers","requested_subtitles","has_drm","was_live"})
+                if(video.TryGetProperty(field,out var value))candidate[field]=value;
+            try{candidates.Add((height,ParsePreparedVideo(JsonSerializer.SerializeToElement(candidate))));}
+            catch(InvalidDataException){/* An unsupported HLS entry cannot weaken the existing boundary. */}
+        }
+        var chosen=candidates.Where(item=>cap==0 || item.Height<=cap).OrderByDescending(item=>item.Height).FirstOrDefault();
+        if(chosen.Media is null)return false;
+        result=chosen.Media with{Resolutions=candidates.Select(item=>item.Height).Distinct().Order().ToArray()};
+        return true;
     }
 
     public static LiveHlsMedia ParseLiveHlsMedia(JsonElement video)=>ParseLiveHlsMediaCore(video);
@@ -701,6 +753,15 @@ public sealed class YouTubeService
     {
         ct.ThrowIfCancellationRequested();
         if(!TryVideoUrl(url,out _,out var canonical))throw new InvalidDataException(UiText.T("지원되지 않는 영상 주소입니다.","This video URL is not supported.","この動画 URL はサポートされていません。"));
+        if(!incognito && _session.SelectedChannel is not null && !audioOnly)
+        {
+            try
+            {
+                var playback=await ResolvePlaybackAsync(canonical,maxHeight,ct,false,subtitleLanguage,verifiedVod:true);
+                return (playback.Vod??throw InvalidMetadata()) with{Status=playback.Status,RequiresVerifiedPlayback=true};
+            }
+            catch(IOException ex)when(ex.InnerException is TimeoutException){throw new YouTubeAccessException("network",true);}
+        }
         using var lease=incognito?new CookieLease(null):_session.Acquire();
         var channel=incognito?null:_session.SelectedChannel;
         var args=BaseArguments(lease.Path,channel);
@@ -715,7 +776,7 @@ public sealed class YouTubeService
         try
         {
             using var doc=JsonDocument.Parse(result.Output);
-            return ParsePreparedVideo(doc.RootElement,audioOnly);
+            return ParsePreparedVideo(doc.RootElement,audioOnly) with{Status=ParsePlaybackStatus(doc.RootElement)};
         }
         catch(JsonException){throw InvalidMetadata();}
     }
@@ -731,7 +792,10 @@ public sealed class YouTubeService
         if(formats.Length is <1 or >2)throw new InvalidDataException(UiText.T("지원되지 않는 스트림 조합입니다.","This stream combination is not supported.","このストリームの組み合わせはサポートされていません。"));
         if(audioOnly && ParsePlaybackStatus(video).LiveStatus is not ("not_live" or "was_live"))throw InvalidMetadata();
         if(audioOnly && (HasFailedFormatProbe(video) || formats.Any(HasFailedFormatProbe)))throw InvalidMetadata();
-        if(audioOnly && HasOriginalAudioFormat(video) && formats.Any(format=>!IsOriginalAudioFormat(format)))throw InvalidMetadata();
+        // Only the audio-bearing half of a split VOD selection carries a language.
+        if(HasOriginalAudioFormat(video) && formats.Any(format=>!IsOriginalAudioFormat(format) &&
+            (audioOnly || format.ValueKind!=JsonValueKind.Object || !format.TryGetProperty("acodec",out var codec) ||
+                codec.ValueKind!=JsonValueKind.String || codec.GetString()!="none")))throw InvalidMetadata();
         var audioOnlyStream=audioOnly && formats.Length==1 && IsAudioOnlyFormat(formats[0]);
         if(audioOnly && !audioOnlyStream && !IsAudioMuxedFallback(video,formats))throw new InvalidDataException(UiText.T("오디오 재생에 사용할 스트림을 확인하지 못했습니다.","Could not verify a stream for audio playback.","音声再生に使用するストリームを確認できませんでした。"));
         var isHls=IsPreparedHls(video)||formats.Any(IsPreparedHls);
@@ -923,6 +987,8 @@ public sealed record LiveHlsMedia(string VideoId,string MediaUrl,IReadOnlyDictio
 public sealed record PreparedVideo(string MediaUrl,IReadOnlyDictionary<string,string> Headers,IReadOnlyList<int> Resolutions,IReadOnlyList<PreparedCaption> Captions,int? HttpChunkSize=null)
 {
     public bool AudioOnly {get;init;}
+    public PlaybackStatus? Status {get;init;}
+    public bool RequiresVerifiedPlayback {get;init;}
     // App policy: accept the pinned extractor's 10 MiB limit, bounded to 64 MiB.
     public const int MaxHttpChunkSize=64*1024*1024;
 }

@@ -15,6 +15,8 @@ public sealed record PlaybackSnapshot
     public double Volume { get; init; } = 100;
     public string HardwareDecoder { get; init; } = "unavailable";
     public bool Loaded { get; init; }
+    // Retained for this media generation even if EOF arrives before publication.
+    internal bool HasEverLoaded { get; init; }
     public bool CanReleaseCookies { get; init; }
     public bool Ended { get; init; }
     public string? EndReason { get; init; }

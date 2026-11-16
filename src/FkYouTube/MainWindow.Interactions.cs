@@ -420,9 +420,9 @@ public partial class MainWindow
             // EOF may start the next video as soon as the player's selection task completes.
             if (changesLanguage)
             {
-                _prefetchCts?.Cancel(); _prefetchAttempt = null; _preparedItem = null;
+                _prefetchCts?.Cancel(); _prefetchAttempt = null; _preparedItem = null; _preparedPlayback = null;
                 _preparedResolutions = []; _preparedCaptions = []; SetPrefetchUiText(()=>"");
-                await ClearPrefetchSafelyAsync();
+                await ClearFuturePrefetchSafelyAsync();
                 if (!Current() || cts.IsCancellationRequested) return;
             }
             await select(cts.Token);
@@ -536,7 +536,8 @@ public partial class MainWindow
         }
         RatingRefreshButton.IsEnabled = hasVideo && authenticated && !_ratingsAccountBusy && !_ratingBusy && _ratingReadCts is null;
         DislikeStatsButton.IsEnabled = hasVideo && !_ratingsAccountBusy && _dislikeStatsCts is null;
-        DislikeStatsButton.Content = _dislikeStats is null ? UiText.T("수치 보기","Show counts","数値を表示") : UiText.T("수치 확인","Check counts","数値を確認");
+        System.Windows.Automation.AutomationProperties.SetName(DislikeStatsButton,
+            _dislikeStats is null ? UiText.T("수치 보기","Show counts","数値を表示") : UiText.T("수치 확인","Check counts","数値を確認"));
         if (!authenticated) SetRatingUiText(() => _settings.Incognito ? UiText.T("시크릿 모드에서는 평가할 수 없습니다.","Ratings are unavailable in Incognito mode.","シークレットモードでは評価できません。") : UiText.T("평가하려면 YouTube 채널을 연결하세요.","Connect a YouTube channel to rate videos.","評価するには YouTube チャンネルを接続してください。"));
     }
 

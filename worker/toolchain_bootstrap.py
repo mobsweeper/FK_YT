@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import inspect
 import json
 import os
 from pathlib import Path
@@ -49,7 +50,7 @@ def check_toolchain(expected_yt, expected_ejs):
     import yt_dlp
     from yt_dlp import version
     import yt_dlp_ejs
-    from yt_dlp.extractor.youtube import YoutubeTabIE
+    from yt_dlp.extractor.youtube import YoutubeIE, YoutubeTabIE
     from yt_dlp.globals import IN_CLI, plugin_dirs
     from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
 
@@ -63,6 +64,26 @@ def check_toolchain(expected_yt, expected_ejs):
                 "_extract_session_index")
     if any(not callable(getattr(YoutubeTabIE, name, None)) for name in required):
         raise ValueError("yt-dlp worker API compatibility check failed")
+
+    # Bind the calls made by youtube_session's verified playback wrappers.
+    # The extractor is uninitialized and the hooks are never invoked here.
+    try:
+        extractor = YoutubeIE(None)
+        inspect.signature(extractor._download_initial_webpage).bind(None, None, None)
+        inspect.signature(extractor._download_ytcfg).bind(None, None)
+        inspect.signature(extractor.extract_ytcfg).bind(None, None)
+        inspect.signature(extractor._extract_context).bind(None, None)
+        headers = inspect.signature(extractor.generate_api_headers)
+        account_args = dict(ytcfg=None, delegated_session_id=None, user_session_id=None, session_index=None)
+        headers.bind(**account_args, default_client="web")
+        headers.bind(**account_args, visitor_data=None)
+
+        authentication = inspect.getattr_static(extractor, "is_authenticated")
+        if authentication is None or callable(authentication) or isinstance(authentication, classmethod):
+            raise TypeError("Expected an authentication state attribute")
+    except (AttributeError, TypeError, ValueError):
+        raise ValueError("yt-dlp verified playback API compatibility check failed") from None
+
     if not hasattr(IN_CLI, "value") or not hasattr(plugin_dirs, "value") or not callable(getattr(FFmpegPostProcessor._ffmpeg_location, "set", None)):
         raise ValueError("yt-dlp adapter compatibility check failed")
     parsed = yt_dlp.parse_options(["--ignore-config", "--no-plugin-dirs", "--no-cache-dir",

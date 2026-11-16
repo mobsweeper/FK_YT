@@ -1,3 +1,7 @@
+> **Unreleased popout-browsing candidate · 2026-10-28.** Playback can continue in the popout while the main window searches or browses. Selecting another video changes playback in that same popout. Returning the popout restores the main player. Account/privacy switches and app shutdown still stop playback. When browsing a new feed, the original queue retains its already loaded entries; it does not fetch unloaded original pages with a second worker. Related recommendations may follow after those entries. The historical 1.1.2 notes below are retained; they are not verification of this candidate. See the accompanying candidate report and the updated Korean, English, or Japanese user guide.
+
+The debugging revision preserves automatic-playback exclusions independently of explicit search results, refreshes queue controls after membership-filter changes, keeps the popout open when a history-save failure prevents stopping, and preserves pending local-history results and browse-error messages across playback updates. It does not add runtime diagnostics or change account/session boundaries.
+
 # FK_YT 1.1.2: usage and limits
 
 This guide describes the portable and installed apps with application version `1.1.2`. See [downloads and installation](RELEASE-1.1.2.md), [licenses](LICENSING-1.1.2.md) and [matching source access](SOURCE-ACCESS-1.1.2.txt).

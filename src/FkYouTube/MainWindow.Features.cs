@@ -9,6 +9,7 @@ namespace FkYouTube;
 public partial class MainWindow
 {
     private Func<string>? _qualityUiText;
+    private int _qualityPopupRevision;
     private int _activePlaybackMaxHeight;
     private bool _liveQualityDeferred;
     private int _failedLiveFromStartGeneration=-1;
@@ -55,9 +56,9 @@ public partial class MainWindow
         var revision=++_audioPreferenceRevision;
         // This preference only invalidates future media. Keep current playback,
         // subtitle operations, and active controls in their existing mode.
-        _prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;
+        _prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;_preparedPlayback=null;
         _preparedResolutions=[];_preparedCaptions=[];SetPrefetchUiText(()=>"");
-        await ClearPrefetchSafelyAsync();
+        await ClearFuturePrefetchSafelyAsync();
         if(revision==_audioPreferenceRevision && !_closing)await EnsurePrefetchAsync();
     }
 
@@ -77,38 +78,38 @@ public partial class MainWindow
 
     private async Task AutoPlayNextAsync(int videoGeneration,int epoch,bool manual=false)
     {
-        var feedGeneration=_playingListGeneration;
         if(AccountWorkBlocked || (!manual && !_settings.AutoPlayNext) || epoch!=_autoplayEpoch ||
-            videoGeneration!=_videoGeneration || feedGeneration!=_feedGeneration || PlayerPanel.Visibility!=Visibility.Visible)return;
+            videoGeneration!=_videoGeneration || !IsPlaybackPresented)return;
         var intent=++_autoplayIntentRevision;
         NotifyPlaybackQueueChanged();
         var accountToken=_accountCts.Token;
         bool IsCurrent()=>!AccountWorkBlocked && (manual || _settings.AutoPlayNext) && epoch==_autoplayEpoch && videoGeneration==_videoGeneration &&
-            intent==_autoplayIntentRevision && feedGeneration==_feedGeneration && PlayerPanel.Visibility==Visibility.Visible;
+            intent==_autoplayIntentRevision && IsPlaybackPresented;
         if(!IsCurrent())return;
         try
         {
-        for(var page=0;page<=4 && IsCurrent();page++)
-        {
-            var changed=_playbackQueueChanged.Task;
-            var fromFeed=_playingIndex>=0 && _playingListGeneration==_feedGeneration;
-            var next=fromFeed?Playback.PlaybackQueue.NextIndex(_items,_playingIndex,_settings.HideMembersOnly):-1;
-            if(next>=0)
-            {
-                if(!IsCurrent())return;
-                await PlayVideoAsync(_items[next],explicitStart:0);
-                return;
-            }
-            // Use an already delivered candidate immediately; wait only when it is missing.
-            if(fromFeed && _loading){await Task.WhenAny(_feedLoadTask,changed).WaitAsync(accountToken);page--;continue;}
-            if(!fromFeed || !_hasFeed || !_hasMore || page==4)break;
-            await Task.WhenAny(FetchBatchAsync(false),changed).WaitAsync(accountToken);
-        }
-        if(!IsCurrent())return;
-        if(_playingIndex>=0 && _hasFeed && !_feedExhausted){SetStatus(()=>UiText.T("다음 재생 가능한 영상을 찾지 못했습니다. 목록을 새로고침하거나 직접 선택해 주세요.","Could not find the next playable video. Refresh the list or choose a video.","次に再生できる動画が見つかりませんでした。一覧を更新するか、動画を選択してください。"));return;}
+        var pages=0;
         while(IsCurrent())
         {
             var changed=_playbackQueueChanged.Task;
+            // A very short file can end while its UI load is still finishing.
+            // Let that load settle its history and queue before auto-advancing.
+            if(!manual && _videoCts is not null)
+            {await changed.WaitAsync(accountToken);continue;}
+            // Display, prefetch and playback all use the same current candidate.
+            // Re-read after every await: a context-menu edit may replace the head.
+            if(NextQueueCandidate() is {} candidate)
+            {
+                if(!IsCurrent())return;
+                await PlayVideoAsync(candidate,explicitStart:0);
+                return;
+            }
+            if(UsesAttachedPlaybackFeed && _loading)
+            {await Task.WhenAny(_feedLoadTask,changed).WaitAsync(accountToken);continue;}
+            if(UsesAttachedPlaybackFeed && _hasFeed && _hasMore && pages<4)
+            {pages++;await Task.WhenAny(FetchBatchAsync(false),changed).WaitAsync(accountToken);continue;}
+            if(UsesAttachedPlaybackFeed && _hasFeed && !_feedExhausted)
+            {SetStatus(()=>UiText.T("다음 재생 가능한 영상을 찾지 못했습니다. 목록을 새로고침하거나 직접 선택해 주세요.","Could not find the next playable video. Refresh the list or choose a video.","次に再生できる動画が見つかりませんでした。一覧を更新するか、動画を選択してください。"));return;}
             // The load starts related metadata only after native playback succeeds.
             // Keep an early EOF's intent until that request is assigned or loading ends.
             if(!_relatedRequested)
@@ -122,10 +123,14 @@ public partial class MainWindow
             // Refresh replaces both the task and CTS. Follow the newest request,
             // including when the canceled old request has already completed.
             if(!ReferenceEquals(pendingRelated,_relatedTask) || !pendingRelated.IsCompleted || _relatedCts is not null)continue;
-            await pendingRelated;break;
+            await pendingRelated;
+            if(!IsCurrent())return;
+            // Completion or a manual edit may have produced a candidate.
+            if(NextQueueCandidate() is not null)continue;
+            break;
         }
         if(!IsCurrent())return;UpdateUpNext();
-        if(_upNext.FirstOrDefault() is {} related)await PlayVideoAsync(related,explicitStart:0);
+        if(NextQueueCandidate() is {} related)await PlayVideoAsync(related,explicitStart:0);
         else SetStatus(()=>UiText.T("목록의 다음 재생 가능한 영상이 없습니다.","There are no more playable videos in the list.","一覧に次に再生できる動画がありません。"));
         }
         catch(OperationCanceledException)when(accountToken.IsCancellationRequested || !IsCurrent()){}
@@ -138,14 +143,15 @@ public partial class MainWindow
         NotifyPlaybackQueueChanged();
         if(_authenticationNoticeGeneration==_videoGeneration)
         {if(_settings.AutoPlayNext)StartAuthenticationSkip();else CancelAuthenticationSkip();}
-        if(!_settings.AutoPlayNext){_prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;SetPrefetchUiText(()=>UiText.T("자동재생 꺼짐","Autoplay off","自動再生オフ"));_=ClearPrefetchSafelyAsync();}
+        if(!_settings.AutoPlayNext){_prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;_preparedPlayback=null;SetPrefetchUiText(()=>UiText.T("자동재생 꺼짐","Autoplay off","自動再生オフ"));_=ClearFuturePrefetchSafelyAsync();}
         else{SetPrefetchUiText(()=>"");_=EnsurePrefetchAsync();}
     }
     private async void HideMembers_Changed(object sender,RoutedEventArgs e)
     {
         if(!_ready)return;
         _settings.HideMembersOnly=HideMembersCheck.IsChecked==true;TrySaveSettings();
-        if(_hasFeed){var view=++_viewGeneration;var source=_source;var title=_browseTitle;if(await StopPlaybackAsync() && !_closing && view==_viewGeneration)await OpenFeedAsync(source,title);}
+        UpdateUpNext();
+        if(_hasFeed){var view=++_viewGeneration;var source=_source;var title=_browseTitle;if(await PrepareMainNavigationAsync() && !_closing && view==_viewGeneration)await OpenFeedAsync(source,title);}
     }
     private async void Incognito_Changed(object sender,RoutedEventArgs e)
     {
@@ -194,8 +200,11 @@ public partial class MainWindow
     {
         if(AccountWorkBlocked || _activeAudioOnly || _current==null || _qualityCts is {IsCancellationRequested:false})return;
         var generation=_videoMetadataGeneration;
+        var popupRevision=++_qualityPopupRevision;
         await LoadResolutionsAsync(_current,generation);
-        if(!_closing && generation==_videoMetadataGeneration && QualityCombo.IsEnabled)QualityCombo.IsDropDownOpen=true;
+        if(!_closing && !IsInTray && IsVisible && WindowState!=WindowState.Minimized &&
+            popupRevision==_qualityPopupRevision && generation==_videoMetadataGeneration && QualityCombo.IsEnabled && QualityCombo.IsVisible)
+            QualityCombo.IsDropDownOpen=true;
     }
     private async Task LoadResolutionsAsync(VideoItem item,int generation)
     {
@@ -215,6 +224,16 @@ public partial class MainWindow
         catch(Exception ex)when(ex is IOException or JsonException or InvalidDataException or Win32Exception)
         {if(!_closing && generation==_videoMetadataGeneration && !cts.IsCancellationRequested)SetQualityUiText(()=>UiText.T("화질 조회 실패 · 재시도","Quality lookup failed · Retry","画質取得失敗 · 再試行"));}
         finally{if(ReferenceEquals(_qualityCts,cts)){_qualityCts=null;QualityLoadButton.IsEnabled=true;}}
+    }
+    private void PublishPlaybackResolutions(VideoItem item,IReadOnlyList<int> resolutions)
+    {
+        // A playback response owns this video's transport-specific catalog.
+        // Retire the separate lookup before publishing, including its late errors.
+        // Its using/finally still owns disposal and the account-read lifetime.
+        _qualityCts?.Cancel();
+        _qualityKey=$"{_settings.AccountKey}:{_settings.Incognito}:{item.Id}";
+        _resolutions=resolutions;
+        DisplayResolutions();
     }
     private void DisplayResolutions()
     {

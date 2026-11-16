@@ -17,12 +17,22 @@ public partial class MainWindow
     private Task _relatedTask=Task.CompletedTask;
     private VideoItem? _prefetchAttempt,_preparedItem;
     private bool _prefetchAudioOnly,_preparedAudioOnly;
+    private PreparedPlaybackContext? _preparedPlayback;
+    private sealed record PreparedPlaybackContext(VideoItem Item,PreparedVideo Media,string Account,CancellationToken AccountToken,
+        int MaxHeight,int SubtitleRevision,long MediaGeneration);
     private IReadOnlyList<int> _preparedResolutions=[];
     private IReadOnlyList<PreparedCaption> _preparedCaptions=[];
     private bool _commentsRequested,_relatedRequested;
     private int _nextPageAttempts;
     private readonly List<VideoItem> _playbackTrail=[];
     private int _playbackTrailRevision;
+    private VideoItem? _lastAcceptedPlaybackItem;
+    private bool _rememberPendingPlayback;
+    private sealed record PlaybackTrailBoundary(int Revision,int Count,int Index);
+    private PlaybackTrailBoundary? _pendingPreviousPlayback;
+    private int _playbackSetupGeneration=-1;
+    private bool IsPreviousPlaybackPending=>_pendingPreviousPlayback is not null &&
+        (_videoCts is not null || _playbackSetupGeneration==_videoGeneration);
     private CancellationTokenSource? _authenticationSkipCts;
     private Task _authenticationSkipTask=Task.CompletedTask;
     private int _authenticationNoticeGeneration=-1;
@@ -30,13 +40,46 @@ public partial class MainWindow
     private int _autoplayIntentRevision;
     private const int MaxPreparedCaptionRequests=3;
 
+    private List<VideoItem>? _detachedPlaybackItems;
+    private readonly HashSet<string> _playbackDismissedVideos=[];
+    private readonly HashSet<string> _playbackDismissedChannels=[];
+    private IReadOnlyList<VideoItem> PlaybackItems => _detachedPlaybackItems ?? _items;
+    private bool HasPlaybackList => _playingIndex>=0 &&
+        (_detachedPlaybackItems is not null || _playingListGeneration==_feedGeneration);
+    private bool PlaybackFeedAttached => HasPlaybackList && _detachedPlaybackItems is null;
+    private bool IsPlayableQueueItem(VideoItem item) => item.Kind=="video" &&
+        (!_settings.HideMembersOnly || !item.MembersOnly) && !IsPlaybackDismissed(item) && !_queueRemovedVideos.Contains(item.Id);
+    private bool IsPlaybackDismissed(VideoItem item) => IsDismissed(item) ||
+        _playbackDismissedVideos.Contains(item.Id) || item.ChannelId is {} channel && _playbackDismissedChannels.Contains(channel);
+
+    private void DetachPlaybackQueue()
+    {
+        if(_current is null || !PlaybackFeedAttached)return;
+        // FeedService has one continuation worker. Retain only delivered entries
+        // before that worker moves to browsing, then use related recommendations.
+        _detachedPlaybackItems=[.._items];
+        NotifyPlaybackQueueChanged();
+    }
+
+    private void SelectPlaybackQueue(VideoItem item)
+    {
+        var retainedIndex=_detachedPlaybackItems?.FindIndex(candidate=>ReferenceEquals(candidate,item))??-1;
+        if(retainedIndex>=0){_playingIndex=retainedIndex;return;}
+        _detachedPlaybackItems=null;
+        _playingListGeneration=_feedGeneration;
+        _playingIndex=_items.FindIndex(candidate=>ReferenceEquals(candidate,item));
+    }
+
     private VideoItem ReplaceCurrentMetadata(VideoItem updated)
     {
         var previous=_current;
         _current=updated;
+        if(ReferenceEquals(_lastAcceptedPlaybackItem,previous))_lastAcceptedPlaybackItem=updated;
         // Metadata versions belong to one exact occurrence, even when the
         // feed deliberately contains several records for the same video ID.
         for(var index=0;index<_items.Count;index++)if(ReferenceEquals(_items[index],previous))_items[index]=updated;
+        if(_detachedPlaybackItems is {} retained)
+            for(var index=0;index<retained.Count;index++)if(ReferenceEquals(retained[index],previous))retained[index]=updated;
         foreach(var row in _rows)for(var index=0;index<row.Items.Count;index++)if(ReferenceEquals(row.Items[index],previous))row.Items[index]=updated;
         for(var index=0;index<_playbackTrail.Count;index++)if(ReferenceEquals(_playbackTrail[index],previous))_playbackTrail[index]=updated;
         return updated;
@@ -65,7 +108,7 @@ public partial class MainWindow
 
     private void HandleAuthenticationRequired()
     {
-        if(_closing || _ratingsAccountBusy || _current is null || PlayerPanel.Visibility!=Visibility.Visible ||
+        if(_closing || _ratingsAccountBusy || _current is null || !IsPlaybackPresented ||
             _authenticationNoticeGeneration==_videoGeneration)return;
         _authenticationNoticeGeneration=_videoGeneration;
         if(IsLivePlayback)
@@ -87,14 +130,14 @@ public partial class MainWindow
         _authenticationSkipCts?.Cancel();
         var cts=CancellationTokenSource.CreateLinkedTokenSource(_accountCts.Token);
         _authenticationSkipCts=cts;
-        _authenticationSkipTask=RunAuthenticationSkipAsync(_videoGeneration,_autoplayEpoch,_viewGeneration,RatingAccountStamp,cts);
+        _authenticationSkipTask=RunAuthenticationSkipAsync(_videoGeneration,_autoplayEpoch,RatingAccountStamp,cts);
     }
 
-    private async Task RunAuthenticationSkipAsync(int generation,int epoch,int view,string account,CancellationTokenSource cts)
+    private async Task RunAuthenticationSkipAsync(int generation,int epoch,string account,CancellationTokenSource cts)
     {
         bool Current()=>!IsLivePlayback && !_closing && !_ratingsAccountBusy && !cts.IsCancellationRequested && _settings.AutoPlayNext &&
-            generation==_videoGeneration && epoch==_autoplayEpoch && view==_viewGeneration && account==RatingAccountStamp &&
-            _authenticationNoticeGeneration==generation && PlayerPanel.Visibility==Visibility.Visible;
+            generation==_videoGeneration && epoch==_autoplayEpoch && account==RatingAccountStamp &&
+            _authenticationNoticeGeneration==generation && IsPlaybackPresented;
         try
         {
             for(var seconds=7;seconds>0;seconds--)
@@ -123,12 +166,17 @@ public partial class MainWindow
     }
     private VideoItem? PreviousVideo()
     {
-        var prior=_playbackTrail.LastOrDefault(v=>!IsDismissed(v) && (!_settings.HideMembersOnly || !v.MembersOnly));
+        // A failed or superseded request is not the last accepted playback.
+        // Returning to that accepted occurrence must work outside a feed too.
+        if(!IsPreviousPlaybackPending &&
+            _lastAcceptedPlaybackItem is {} accepted && !ReferenceEquals(accepted,_current) &&
+            !IsPlaybackDismissed(accepted) && (!_settings.HideMembersOnly || !accepted.MembersOnly))return accepted;
+        var prior=_playbackTrail.LastOrDefault(v=>!IsPlaybackDismissed(v) && (!_settings.HideMembersOnly || !v.MembersOnly));
         if(prior!=null)return prior;
-        if(_playingIndex>=0 && _playingListGeneration==_feedGeneration)
+        if(HasPlaybackList)
         {
             for(var index=_playingIndex-1;index>=0;index--)
-                if(_items[index].Kind=="video" && (!_settings.HideMembersOnly || !_items[index].MembersOnly) && !IsDismissed(_items[index]))return _items[index];
+                if(PlaybackItems[index].Kind=="video" && (!_settings.HideMembersOnly || !PlaybackItems[index].MembersOnly) && !IsPlaybackDismissed(PlaybackItems[index]))return PlaybackItems[index];
             return null;
         }
         return null;
@@ -138,19 +186,41 @@ public partial class MainWindow
     {
         if(_closing || PreviousVideo() is not {} previous)return;
         _autoplayIntentRevision++;NotifyPlaybackQueueChanged();
-        var trailRevision=_playbackTrailRevision;var trailCount=_playbackTrail.Count;
-        var trailIndex=_playbackTrail.FindLastIndex(v=>ReferenceEquals(v,previous));
-        var accepted=await PlayVideoAsync(previous,explicitStart:0,rememberHistory:false);
-        // Metadata may replace references while the accepted load is awaited.
-        // Only structural history edits invalidate this navigation's boundary.
-        if(accepted && trailIndex>=0 && _playbackTrailRevision==trailRevision && _playbackTrail.Count==trailCount)
-        {_playbackTrail.RemoveRange(trailIndex,_playbackTrail.Count-trailIndex);_playbackTrailRevision++;}
+        var returningToAccepted=!IsPreviousPlaybackPending &&
+            ReferenceEquals(previous,_lastAcceptedPlaybackItem) && !ReferenceEquals(previous,_current);
+        var trailIndex=returningToAccepted?-1:_playbackTrail.FindLastIndex(v=>ReferenceEquals(v,previous));
+        var boundary=new PlaybackTrailBoundary(_playbackTrailRevision,_playbackTrail.Count,trailIndex);
+        CancelLiveRecovery();_liveReconnectAttempts=0;
+        await PlayVideoCoreAsync(previous,explicitStart:0,rememberHistory:false,historyBoundary:boundary);
+        UpdateSkipButtons();
+    }
+    private void CommitPlaybackHistory()
+    {
+        // Snapshot/metadata callbacks may replace the local item while loading.
+        // The current generation owns both this occurrence and its history intent.
+        if(_rememberPendingPlayback && _lastAcceptedPlaybackItem is {} priorItem)
+        {_playbackTrail.Add(priorItem);if(_playbackTrail.Count>100)_playbackTrail.RemoveAt(0);_playbackTrailRevision++;}
+        _lastAcceptedPlaybackItem=_current;_rememberPendingPlayback=false;
+        var boundary=_pendingPreviousPlayback;_pendingPreviousPlayback=null;
+        // A quality reload can supersede Previous's first load. Its accepted
+        // replacement still consumes the same structural boundary exactly once.
+        if(boundary is {Index:>=0} && _playbackTrailRevision==boundary.Revision && _playbackTrail.Count==boundary.Count)
+        {_playbackTrail.RemoveRange(boundary.Index,_playbackTrail.Count-boundary.Index);_playbackTrailRevision++;}
+    }
+    private void CompletePlaybackSelection()
+    {
+        // Command acknowledgements can arrive before mpv opens the media. Wait
+        // for the exact generation to reach file-loaded or a terminal event.
+        if(_playbackSetupGeneration!=_videoGeneration || !_hasLoadedCurrent && _snapshot?.Ended!=true)return;
+        _playbackSetupGeneration=-1;
+        if(_hasLoadedCurrent)CommitPlaybackHistory();
+        FinishCustomQueuePlayback(_activeCustomQueueEntry,_videoGeneration,_hasLoadedCurrent);
         UpdateSkipButtons();
     }
     private void UpdateSkipButtons()
     {
         PreviousVideoButton.IsEnabled=_current!=null && PreviousVideo()!=null;
-        NextVideoButton.IsEnabled=_current!=null && (_upNext.Count>0 || _relatedCts!=null || (_playingIndex>=0 && _hasMore));
+        NextVideoButton.IsEnabled=_current!=null && (NextQueueCandidate()!=null || _relatedCts!=null || (UsesAttachedPlaybackFeed && _hasMore));
         UpdatePopoutSkipButtons();
     }
 
@@ -161,7 +231,7 @@ public partial class MainWindow
         CancelSubtitleOperations();
         CloseDescriptionPopup();
         _prefetchCts?.Cancel();_captionCts?.Cancel();
-        _prefetchAttempt=null;_preparedItem=null;_preparedResolutions=[];_preparedCaptions=[];
+        _prefetchAttempt=null;_preparedItem=null;_preparedPlayback=null;_preparedResolutions=[];_preparedCaptions=[];
         SetPrefetchUiText(()=>"");
         if(!preserveMetadata)
         {
@@ -233,7 +303,7 @@ public partial class MainWindow
                 _lastSavedKey="";UpdatePlayingChannel(_current);
             }
             _relatedItems.Clear();var seen=new HashSet<string>();
-            foreach(var video in items.Where(v=>v.Kind=="video" && v.Id!=item.Id && (!_settings.HideMembersOnly || !v.MembersOnly) && !IsDismissed(v)))
+            foreach(var video in items.Where(v=>IsPlayableQueueItem(v) && v.Id!=item.Id))
                 if(seen.Add(video.Id))_relatedItems.Add(video);
             SetRelatedUiText(()=>_relatedItems.Count>0?UiText.F("YouTube 관련 추천 · {0}개","Related YouTube recommendations · {0}","YouTube の関連するおすすめ · {0} 件",_relatedItems.Count):UiText.T("YouTube가 관련 추천을 제공하지 않았습니다.","YouTube did not provide related recommendations.","YouTube から関連するおすすめが提供されませんでした。"));
             UpdateUpNext();
@@ -247,23 +317,18 @@ public partial class MainWindow
     {
         NotifyPlaybackQueueChanged();
         if(_current==null)return;
-        var items=new List<VideoItem>();
-        var fromFeed=_playingIndex>=0 && _playingListGeneration==_feedGeneration;
-        if(fromFeed)
-            items.AddRange(_items.Skip(_playingIndex+1).Where(v=>v.Kind=="video" && (!_settings.HideMembersOnly || !v.MembersOnly) && !IsDismissed(v)).Take(20));
-        // A playlist keeps its order (including intentional duplicates) through its last page.
-        if(items.Count==0 && (!fromFeed || !_hasFeed || _feedExhausted))
-            items.AddRange(_relatedItems.Where(v=>v.Id!=_current.Id && !_autoplaySeen.Contains(v.Id)).Take(20));
+        var items=_customQueueActive && NextCustomQueueEntry() is not null
+            ? RunnableQueueItems().ToList() : RunnableQueueItems().Take(20).ToList();
         _upNext.Clear();foreach(var item in items)_upNext.Add(item);
+        foreach(var held in _customQueue.Where(entry=>entry.State==CustomQueueState.Held))_upNext.Add(held.Item);
         UpdateSkipButtons();
         RefreshQueueUiText();
-        if(items.Count==0 && fromFeed && _hasFeed && _hasMore && !_loading && _nextPageAttempts<4)
+        ClearCustomQueueButton.Visibility=_customQueue.Count>0?Visibility.Visible:Visibility.Collapsed;
+        if(items.Count==0 && UsesAttachedPlaybackFeed && _hasFeed && _hasMore && !_loading && _nextPageAttempts<4)
         {_nextPageAttempts++;_=FetchBatchAsync(false);}
-        if(_videoCts==null && (!ReferenceEquals(_prefetchAttempt,_upNext.FirstOrDefault()) || _prefetchAudioOnly!=_settings.AudioOnly))
-        {
-            _prefetchCts?.Cancel();_prefetchAttempt=null;_preparedItem=null;_preparedResolutions=[];_preparedCaptions=[];SetPrefetchUiText(()=>"");
-            if(_playerStarted)_=ClearPrefetchSafelyAsync();
-        }
+        if(_videoCts==null && !IsTrayPrefetchResetPending &&
+            (!ReferenceEquals(_prefetchAttempt,NextQueueCandidate()) || _prefetchAudioOnly!=EffectiveNextAudioOnly))
+            InvalidateFuturePrefetch();
         _=EnsurePrefetchAsync();
     }
     private void RefreshQueueUiText()
@@ -271,36 +336,61 @@ public partial class MainWindow
         if(_prefetchUiText is {} prefetchText)PrefetchState.Text=prefetchText();
         if(_relatedUiText is {} relatedText)RelatedState.Text=relatedText();
         if(_current==null)return;
-        var items=_upNext;
-        var fromFeed=_playingIndex>=0 && _playingListGeneration==_feedGeneration;
-        NextState.Text=items.Count>0?(fromFeed && _items.Contains(items[0])?UiText.T("현재 목록 순서대로 재생 · 맨 위가 다음 영상","Playing in list order · The top video is next","現在の一覧順に再生 · 一番上が次の動画"):UiText.T("관련 추천에서 이어서 재생 · 맨 위가 다음 영상","Continue with related recommendations · The top video is next","関連するおすすめから続けて再生 · 一番上が次の動画")):
-            fromFeed && _hasMore?UiText.T("목록의 다음 페이지를 확인하는 중…","Checking the next page of the list…","一覧の次のページを確認中…"):fromFeed && _hasFeed && !_feedExhausted?UiText.T("다음 목록 확인에 실패했습니다. 목록으로 돌아가 새로고침해 주세요.","Could not check the next page. Return to the list and refresh it.","次の一覧を確認できませんでした。一覧に戻って更新してください。"):_relatedCts!=null?UiText.T("관련 추천을 불러오는 중…","Loading related recommendations…","関連するおすすめを読み込み中…"):UiText.T("다음 재생할 영상이 없습니다.","There is no next video to play.","次に再生する動画がありません。");
+        var items=RunnableQueueItems().Take(20).ToArray();
+        var fromFeed=UsesPlaybackFeed;
+        if(_customQueueActive)
+        {
+            var pending=_customQueue.Count(IsCustomQueuePlayable);var held=_customQueue.Count(entry=>entry.State==CustomQueueState.Held);
+            NextState.Text=pending>0?UiText.F("직접 선택한 대기열 · {0}개 · 끝나면 마지막 영상의 추천 재생", "Your queue · {0} videos · Recommendations follow the last video", "選択したキュー・{0} 件・終了後は最後の動画のおすすめ",pending):
+                _relatedCts is not null?UiText.T("마지막 영상의 추천을 불러오는 중…", "Loading recommendations for the last video…", "最後の動画のおすすめを読み込み中…"):
+                items.Length>0?UiText.T("마지막 영상의 추천으로 이어서 재생", "Continuing with recommendations for the last video", "最後の動画のおすすめから続けて再生"):
+                UiText.T("다음 추천 영상이 없습니다.", "There is no next recommendation.", "次のおすすめ動画がありません。");
+            if(held>0)NextState.Text+=UiText.F(" · 보류 {0}개 (우클릭으로 다시 추가)", " · {0} held (right-click to queue again)", "・保留 {0} 件（右クリックで再追加）",held);
+            return;
+        }
+        NextState.Text=items.Length>0?(fromFeed && PlaybackItems.Contains(items[0])?(_detachedPlaybackItems is not null
+            ?UiText.T("처음 목록에서 불러온 영상 순서대로 재생 · 맨 위가 다음 영상","Playing loaded videos from the original list · The top video is next","元の一覧から読み込み済みの動画順に再生 · 一番上が次の動画")
+            :UiText.T("현재 목록 순서대로 재생 · 맨 위가 다음 영상","Playing in list order · The top video is next","現在の一覧順に再生 · 一番上が次の動画")):UiText.T("관련 추천에서 이어서 재생 · 맨 위가 다음 영상","Continue with related recommendations · The top video is next","関連するおすすめから続けて再生 · 一番上が次の動画")):
+            PlaybackFeedAttached && _hasMore?UiText.T("목록의 다음 페이지를 확인하는 중…","Checking the next page of the list…","一覧の次のページを確認中…"):PlaybackFeedAttached && _hasFeed && !_feedExhausted?UiText.T("다음 목록 확인에 실패했습니다. 목록으로 돌아가 새로고침해 주세요.","Could not check the next page. Return to the list and refresh it.","次の一覧を確認できませんでした。一覧に戻って更新してください。"):_relatedCts!=null?UiText.T("관련 추천을 불러오는 중…","Loading related recommendations…","関連するおすすめを読み込み中…"):UiText.T("다음 재생할 영상이 없습니다.","There is no next video to play.","次に再生する動画がありません。");
+    }
+
+    private PreparedVideo? GetPreparedPlayback(VideoItem item,bool audioOnly,int requestedHeight)
+    {
+        var prepared=_preparedPlayback;
+        return ReferenceEquals(item,_preparedItem) && _preparedAudioOnly==audioOnly && prepared is not null &&
+            ReferenceEquals(item,prepared.Item) && prepared.Media.AudioOnly==audioOnly && prepared.Media.Status?.VideoId==item.Id &&
+            prepared.Account==RatingAccountStamp && prepared.AccountToken==_accountCts.Token && !prepared.AccountToken.IsCancellationRequested &&
+            prepared.MaxHeight==YouTubeService.NormalizeMaxHeight(requestedHeight) && prepared.SubtitleRevision==_subtitlePreferenceRevision &&
+            prepared.MediaGeneration==_expectedMediaGeneration?prepared.Media:null;
     }
 
     private async Task EnsurePrefetchAsync()
     {
-        if(AccountWorkBlocked || _current?.LiveStatus=="is_live" || _snapshot?.IsLive==true || SubtitlePreferencePending || !_settings.AutoPlayNext || _videoCts!=null || _snapshot?.Loaded!=true || _snapshot.Duration<=0 || _snapshot.Duration-_snapshot.Position>60)return;
-        var candidate=_upNext.FirstOrDefault();
+        if(AccountWorkBlocked || IsTrayPrefetchResetPending || _current?.LiveStatus=="is_live" || _snapshot?.IsLive==true || SubtitlePreferencePending || !_settings.AutoPlayNext || _videoCts!=null || _snapshot?.Loaded!=true || _snapshot.Duration<=0 || _snapshot.Duration-_snapshot.Position>60)return;
+        var candidate=NextQueueCandidate();
         if(candidate==null || candidate.LiveStatus is "is_live" or "is_upcoming" or "post_live" ||
-            ReferenceEquals(candidate,_prefetchAttempt) && _prefetchAudioOnly==_settings.AudioOnly)return;
+            ReferenceEquals(candidate,_prefetchAttempt) && _prefetchAudioOnly==EffectiveNextAudioOnly)return;
         using var readLifetime=BeginAccountRead();
         _prefetchCts?.Cancel();using var cts=new CancellationTokenSource();_prefetchCts=cts;_prefetchAttempt=candidate;
         var generation=_videoGeneration;var mediaGeneration=_expectedMediaGeneration;var height=_settings.MaxHeight;
-        var audioOnly=_settings.AudioOnly;_prefetchAudioOnly=audioOnly;
+        var account=RatingAccountStamp;var accountToken=_accountCts.Token;
+        var audioOnly=EffectiveNextAudioOnly;_prefetchAudioOnly=audioOnly;
         var preferenceRevision=_subtitlePreferenceRevision;var language=_player.PreferredSubtitleLanguage;
         SetPrefetchUiText(()=>UiText.T("다음 영상 미리 준비 중…","Preparing the next video…","次の動画を準備中…"));
         bool Current()=>!AccountWorkBlocked && _current?.LiveStatus!="is_live" && _snapshot?.IsLive!=true &&
-            !cts.IsCancellationRequested && generation==_videoGeneration &&
-            mediaGeneration==_expectedMediaGeneration && preferenceRevision==_subtitlePreferenceRevision && audioOnly==_settings.AudioOnly &&
-            _settings.AutoPlayNext && ReferenceEquals(candidate,_upNext.FirstOrDefault());
+            !cts.IsCancellationRequested && generation==_videoGeneration && account==RatingAccountStamp && accountToken==_accountCts.Token && !accountToken.IsCancellationRequested &&
+            mediaGeneration==_expectedMediaGeneration && preferenceRevision==_subtitlePreferenceRevision && audioOnly==EffectiveNextAudioOnly &&
+            _settings.AutoPlayNext && ReferenceEquals(candidate,NextQueueCandidate());
         try
         {
             var prepared=await _youtube.ResolveNextAsync(candidate.Url,height,cts.Token,_settings.Incognito,language,audioOnly);
             if(!Current())return;
-            var ready=await _player.PrepareNextAsync(candidate.Url,prepared.MediaUrl,mediaGeneration,height,prepared.Headers,cts.Token,prepared.HttpChunkSize,audioOnly);
+            // Once append is submitted, a queue edit invalidates its result but
+            // lets the native entry ID be confirmed before safe future cleanup.
+            var ready=await _player.PrepareNextAsync(candidate.Url,prepared.MediaUrl,mediaGeneration,height,prepared.Headers,accountToken,prepared.HttpChunkSize,audioOnly);
             if(Current())
             {
-                if(ready){_preparedItem=candidate;_preparedAudioOnly=audioOnly;_preparedResolutions=prepared.Resolutions;_preparedCaptions=audioOnly?[]:prepared.Captions;SetPrefetchUiText(()=>UiText.T("다음 영상 준비됨 · 영상 끝부분에서 미리 버퍼링","Next video ready · Buffering near the end of this video","次の動画の準備完了 · この動画の終わり頃に先行バッファリング"));}
+                if(ready){_preparedItem=candidate;_preparedAudioOnly=audioOnly;_preparedPlayback=new(candidate,prepared,account,accountToken,YouTubeService.NormalizeMaxHeight(height),preferenceRevision,mediaGeneration);_preparedResolutions=prepared.Resolutions;_preparedCaptions=audioOnly?[]:prepared.Captions;SetPrefetchUiText(()=>UiText.T("다음 영상 준비됨 · 영상 끝부분에서 미리 버퍼링","Next video ready · Buffering near the end of this video","次の動画の準備完了 · この動画の終わり頃に先行バッファリング"));}
                 else SetPrefetchUiText(()=>UiText.T("다음 영상은 일반 방식으로 이어 재생합니다.","The next video will continue with normal playback.","次の動画は通常の方法で続けて再生します。"));
             }
         }

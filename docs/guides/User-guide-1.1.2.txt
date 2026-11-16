@@ -1,3 +1,26 @@
+Account playback update · 2026-11-15
+
+This update builds on version 1.1.2 and the popout browsing changes.
+Extract FK_YT-account-playback-20261115-portable.zip into a new folder and run FK_YT/FK_YT.exe. Keep your existing installation intact. Matching application and yt-dlp sources are in FK_YT-account-playback-20261115-source.zip.
+
+The personal-backup ZIP includes settings, encrypted sign-in information and watch history. Do not share it. Extract and run it under the same Windows user to retain your saved account; another computer or Windows user may require reconnecting. The public portable ZIP contains none of this personal data.
+
+Both yt-dlp components use version 2026.10.26. Ordinary videos for a selected account first verify the watch page's signed-in channel and then prefer validated HLS streams. The quality list shows verified HLS resolutions, so higher direct-only resolutions may be absent. If no eligible HLS stream is available, playback uses the same account's existing direct path. It never retries as a guest or another account. Live, audio-only and incognito playback retain their existing paths.
+
+1. Start music or a video, then choose Pop out.
+2. Use the main window to search and browse while playback continues in the separate window.
+3. Searching or browsing alone does not change the playing video. Clicking another video starts it in the same popout.
+4. Choose Return to main window or close the popout to bring the current playback back. Minimizing the main window keeps the popout visible; exiting the main app closes both windows and playback.
+5. Switching the account/channel or incognito mode still stops playback from the previous account context.
+
+Autoplay scope: when you browse a different list, the already loaded entries of the original queue keep their order. Unloaded pages of that original list are not fetched by a second worker. When the saved entries run out, available related recommendations are used; playback stops if there are none. Intentional playlist duplicates remain intact.
+
+See THIRD-PARTY-NOTICES.txt and runtime/yt-dlp/SOURCE-AND-LICENSE.txt for component licenses and corresponding sources. The public portable contains no personal data or test scripts. The original 1.1.2 guidance below describes that published version.
+
+This revision keeps dismissed videos/channels out of the automatic playback queue across searches; explicit searches still show them for manual playback. It refreshes Next when the membership filter changes. If saving history prevents playback from stopping, the popout stays open. Returning to the main player no longer discards a pending local-history result, and routine playback updates no longer overwrite browsing errors.
+
+────────────────────────────────────────
+
 FK_YT 1.1.2 user guide
 Updated 2026-10-19
 

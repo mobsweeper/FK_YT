@@ -27,6 +27,15 @@ public partial class MainWindow
     private bool _popoutCloseWithoutActivation;
     private Action? _refreshPopoutUiText;
 
+    // The host must really belong to the visible window before navigation may
+    // leave playback running. A failed or canceled transfer is not a popout.
+    private bool HasActivePopout => !_popoutShutdown && _popoutWindow is { IsVisible: true } &&
+        _popoutSurface is not null && ReferenceEquals(VideoHost.Parent, _popoutSurface);
+    private bool IsPlaybackPresented => PlayerPanel.Visibility == Visibility.Visible || HasActivePopout || (IsInTray && _current is not null);
+
+    private Task<bool> PrepareMainNavigationAsync() => HasActivePopout
+        ? Task.FromResult(true) : StopPlaybackAsync();
+
     private void RefreshPopoutUiText()
     {
         PopoutLaunchButton.SetCurrentValue(ContentControl.ContentProperty, _popoutWindow is null
@@ -36,7 +45,7 @@ public partial class MainWindow
 
     private async void Popout_Click(object sender, RoutedEventArgs e)
     {
-        if (_closing) return;
+        if (_closing || IsInTray) return;
         if (_popoutWindow is { } existing)
         {
             existing.Close();
@@ -50,7 +59,7 @@ public partial class MainWindow
         if (_fullscreen) ToggleFullscreen();
         UpdateLayout();
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
-        if (_closing || !_playerStarted || _current is null) return;
+        if (_closing || IsInTray || !_playerStarted || _current is null) return;
         if (_popoutWindow is { } opened)
         {
             opened.Close();
@@ -127,6 +136,23 @@ public partial class MainWindow
         var restore = PopoutButton(UiText.T("원래 창으로","Return to main window","元のウィンドウへ"));
         toolbar.Children.Add(restore);
 
+        // Authentication skip remains visible and cancelable even when its
+        // original player panel is hidden behind the main browse view.
+        var authentication = new Grid();
+        authentication.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        authentication.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var authenticationText = new TextBlock { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        authenticationText.SetBinding(TextBlock.TextProperty, new Binding(nameof(TextBlock.Text)) { Source = AuthenticationNoticeText });
+        authentication.Children.Add(authenticationText);
+        var cancelAuthentication = PopoutButton(UiText.T("다음 재생 취소", "Cancel next video", "次の再生をキャンセル"));
+        cancelAuthentication.SetBinding(IsEnabledProperty, new Binding(nameof(Button.IsEnabled)) { Source = AuthenticationSkipCancelButton });
+        cancelAuthentication.Click += AuthenticationSkipCancel_Click;
+        Grid.SetColumn(cancelAuthentication, 1);
+        authentication.Children.Add(cancelAuthentication);
+        var authenticationNotice = new Border { Child = authentication, Margin = new Thickness(0, 8, 0, 0) };
+        authenticationNotice.SetBinding(VisibilityProperty, new Binding(nameof(Border.Visibility)) { Source = AuthenticationNoticePanel });
+        controls.Children.Add(authenticationNotice);
+
         var popup = new Window
         {
             Owner = this, Title = "FK_YT · " + _current.Title, Content = layout,
@@ -157,6 +183,10 @@ public partial class MainWindow
             RefreshPopoutUiText();
             if (!_closing && !_popoutShutdown && !_popoutCloseWithoutActivation)
             {
+                _viewGeneration++;
+                if (_current is not null) ShowPanel("player");
+                UpdateLayout();
+                VideoHost.UpdateWindowPos();
                 if (WindowState == WindowState.Minimized) WindowState = mainRestoreState;
                 Activate();
                 PlayPauseButton.Focus();
@@ -181,11 +211,12 @@ public partial class MainWindow
             subtitles.Content = UiText.T("자막 ▾","Subtitles ▾","字幕 ▾");
             pin.Content = UiText.T("항상 위","Always on top","常に手前に表示");
             restore.Content = UiText.T("원래 창으로","Return to main window","元のウィンドウへ");
+            cancelAuthentication.Content = UiText.T("다음 재생 취소", "Cancel next video", "次の再生をキャンセル");
             if (_snapshot is { } snapshot) UpdatePopoutSnapshot(snapshot);
         };
         RefreshPopoutUiText();
         _popoutControlsAutoHide = new PlaybackControlsAutoHide(popup, layout, tray, wakeZone,
-            () => _popoutSeekDragging || SubtitleControlsBusy);
+            () => _popoutSeekDragging || SubtitleControlsBusy || AuthenticationNoticePanel.Visibility == Visibility.Visible);
         var nativeHandle = VideoHost.Handle;
         try
         {
@@ -201,6 +232,9 @@ public partial class MainWindow
             VideoHost.UpdateWindowPos();
             if (nativeHandle == 0 || VideoHost.Handle != nativeHandle)
                 throw new InvalidOperationException("The native video window changed while opening the popout.");
+            // The existing feed remains available while the native player stays
+            // in this window; no reload or second feed worker is needed.
+            ShowPanel("browse");
             UpdatePopoutSnapshot(_snapshot ?? _player.Snapshot);
             pause.Focus();
             _popoutControlsAutoHide.Enabled = true;

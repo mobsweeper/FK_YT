@@ -459,7 +459,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
             lock (_stateLock)
             {
                 _entryGenerations[entry.Value] = generation;
-                if (_loadedEntries.Contains(entry.Value)) SetSnapshotLocked(_snapshot with { Loaded = true, Buffering = false, CanReleaseCookies = resolvedStream is not null || liveStream is not null || liveFromStart });
+                if (_loadedEntries.Contains(entry.Value)) SetSnapshotLocked(_snapshot with { Loaded = true, HasEverLoaded = true, Buffering = false, CanReleaseCookies = resolvedStream is not null || liveStream is not null || liveFromStart });
                 if (_endedEntries.TryGetValue(entry.Value, out var end)) ended = end;
                 // Retain a bounded amount of old IDs so delayed end-file events remain distinguishable.
                 foreach (var old in _entryGenerations.Where(p => p.Value < generation - 8).Select(p => p.Key).ToArray())
@@ -673,6 +673,67 @@ public sealed class MpvPlayerService : IAsyncDisposable
         finally { _loadGate.Release(); }
     }
 
+    /// <summary>Discards a future preload when possible without stopping or replacing current playback.</summary>
+    public async Task<bool> TryClearPreparedNextAsync(long expectedMediaGeneration, CancellationToken cancellationToken = default)
+    {
+        if (Volatile.Read(ref _disposed) != 0) return false;
+        await _loadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Session session;
+            PreparedNext prepared;
+            long currentEntry;
+            lock (_stateLock)
+            {
+                if (_session is not { } current || _preparedNext is not { } next ||
+                    !ReferenceEquals(next.Session, current) || next.OriginGeneration != expectedMediaGeneration ||
+                    _snapshot.MediaGeneration != expectedMediaGeneration) return true;
+                if (_activeEntry is not { } active || active == next.Entry || !IsCurrentEntry(active)) return false;
+                session = current;
+                prepared = next;
+                currentEntry = active;
+            }
+            var timeout = TimeSpan.FromSeconds(2);
+            var playlist = ReadPreparedPlaylist(await SendAsync(session, ["get_property", "playlist"],
+                cancellationToken, timeout).ConfigureAwait(false));
+            if (!IsCurrentLoad(session, expectedMediaGeneration)) return true;
+            if (playlist.TryGetValue(prepared.Entry, out var owned))
+            {
+                // A playlist index can become the current entry when native
+                // playback reaches EOF between the query and the remove. Use
+                // mpv's command that preserves its current entry, only after
+                // verifying the list comprises the current and one owned item.
+                if (playlist.Count != 2 || owned.Active || !playlist.TryGetValue(currentEntry, out var current) ||
+                    !current.Active || current.Index >= owned.Index) return false;
+                await SendAsync(session, ["playlist-clear"], cancellationToken, timeout, beforeWrite: () =>
+                {
+                    lock (_stateLock)
+                        if (!ReferenceEquals(_session, session) || _snapshot.MediaGeneration != expectedMediaGeneration ||
+                            _activeEntry != currentEntry || !ReferenceEquals(_preparedNext, prepared))
+                            throw new InvalidOperationException("The current playlist entry changed.");
+                }).ConfigureAwait(false);
+                playlist = ReadPreparedPlaylist(await SendAsync(session, ["get_property", "playlist"],
+                    cancellationToken, timeout).ConfigureAwait(false));
+                if (playlist.ContainsKey(prepared.Entry)) return false;
+            }
+            lock (_stateLock)
+            {
+                if (!ReferenceEquals(_session, session) || _snapshot.MediaGeneration != expectedMediaGeneration) return true;
+                if (_activeEntry == prepared.Entry) return false;
+                if (ReferenceEquals(_preparedNext, prepared)) _preparedNext = null;
+            }
+            return true;
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or InvalidOperationException or TimeoutException)
+        {
+            // Keep ownership for the normal media transition; do not tear down
+            // the active session when a future-only change cannot be verified.
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return false; }
+        finally { _loadGate.Release(); }
+    }
+
     private async Task ClearPreparedNextCoreAsync(Session session)
     {
         PreparedNext? prepared;
@@ -730,7 +791,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
             index++;
         }
         if (!found) return false;
-        bool active;
+        bool active, adoptionCommitted = false;
         JsonElement? ended = null;
         var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         session.FileReady[prepared.Entry] = ready;
@@ -746,7 +807,7 @@ public sealed class MpvPlayerService : IAsyncDisposable
                 if (_endedEntries.TryGetValue(prepared.Entry, out var end)) ended = end;
                 if (!ended.HasValue && _loadedEntries.Contains(prepared.Entry))
                 {
-                    SetSnapshotLocked(_snapshot with { Loaded = true, Ended = false, EndReason = null, Buffering = false, CanReleaseCookies = true });
+                    SetSnapshotLocked(_snapshot with { Loaded = true, Ended = false, EndReason = null, Buffering = false });
                     ready.TrySetResult(true);
                 }
             }
@@ -759,10 +820,22 @@ public sealed class MpvPlayerService : IAsyncDisposable
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && !session.Token.IsCancellationRequested) { return false; }
             if (!loaded) return false;
             lock (_stateLock) if (_endedEntries.ContainsKey(prepared.Entry)) return false;
-            lock (_stateLock) SetSnapshotLocked(_snapshot with { CanReleaseCookies = true });
             // Only trim after this exact entry has reached file-loaded. Resolve each removal's
             // fresh index by ID; old indexes shift as earlier history entries are removed.
             await TryTrimPlaylistAsync(session, prepared.Entry, generation).ConfigureAwait(false);
+            lock (_stateLock)
+            {
+                // A preload that ended before adoption can still fall back. Once
+                // accepted here, end-file must update this generation even while
+                // its pause command and property refresh are still in progress.
+                if (!ReferenceEquals(_session, session) || !IsCurrentEntry(prepared.Entry) ||
+                    _endedEntries.ContainsKey(prepared.Entry)) return false;
+                // The native fallback can still need this load's cookie lease
+                // until we commit to the direct, prepared stream.
+                SetSnapshotLocked(_snapshot with { HasEverLoaded = true, CanReleaseCookies = true });
+                adoptionCommitted = true;
+                Interlocked.Exchange(ref session.AdoptingEntry, -1);
+            }
             // Per-file pause=yes is applied asynchronously during loading. Apply the
             // requested state after file-loaded so an early unpause cannot be overwritten.
             var pauseCommand=new object[]{"set_property","pause",startPaused};
@@ -778,7 +851,28 @@ public sealed class MpvPlayerService : IAsyncDisposable
             PublishSnapshot();
             return true;
         }
-        finally { session.FileReady.TryRemove(prepared.Entry, out _); Interlocked.Exchange(ref session.AdoptingEntry, -1); }
+        finally
+        {
+            session.FileReady.TryRemove(prepared.Entry, out _);
+            var discarded = false;
+            lock (_stateLock)
+            {
+                // Fallback keeps this media generation but replaces the entry.
+                // Ignore any late file events from the abandoned provisional entry.
+                if (!adoptionCommitted && ReferenceEquals(_session, session) &&
+                    _snapshot.MediaGeneration == generation && IsCurrentEntry(prepared.Entry))
+                {
+                    _entryGenerations.Remove(prepared.Entry);
+                    if (_snapshot.Loaded)
+                    {
+                        SetSnapshotLocked(_snapshot with { Loaded = false, Buffering = true });
+                        discarded = true;
+                    }
+                }
+                Interlocked.Exchange(ref session.AdoptingEntry, -1);
+            }
+            if (discarded) PublishSnapshot();
+        }
     }
 
     private async Task<JsonElement?> TryTrimPlaylistAsync(Session session, long currentEntry, long generation)
@@ -1625,8 +1719,9 @@ public sealed class MpvPlayerService : IAsyncDisposable
                         if (session.FileReady.TryRemove(active, out var ready)) ready.TrySetResult(true);
                         if (IsCurrentEntry(active))
                         {
-                            SetSnapshotLocked(_snapshot with { Loaded = true, Ended = false, EndReason = null, Buffering = false,ErrorMessage=null,ErrorCode=null,FailureClassificationPending=false,AuthenticationRequired=false,
-                                CanReleaseCookies = Interlocked.Read(ref session.DirectEntry) == active });
+                            var adopting = Interlocked.Read(ref session.AdoptingEntry) == active;
+                            SetSnapshotLocked(_snapshot with { Loaded = true, HasEverLoaded = _snapshot.HasEverLoaded || !adopting, Ended = false, EndReason = null, Buffering = false,ErrorMessage=null,ErrorCode=null,FailureClassificationPending=false,AuthenticationRequired=false,
+                                CanReleaseCookies = Interlocked.Read(ref session.DirectEntry) == active && !adopting });
                             loadedEntry = active; loadedGeneration = _snapshot.MediaGeneration;
                         }
                     }

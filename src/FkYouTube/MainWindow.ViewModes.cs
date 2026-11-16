@@ -74,12 +74,13 @@ public partial class MainWindow
         PlaybackControlsTray.Visibility = hideControls ? Visibility.Collapsed : Visibility.Visible;
         HidePlaybackControlsButton.Visibility = manualControls ? Visibility.Visible : Visibility.Collapsed;
         ShowPlaybackControlsButton.Visibility = hideControls ? Visibility.Visible : Visibility.Collapsed;
-        SidebarColumn.Width = new(wide ? 0 : 184);
+        SidebarColumn.Width = new(wide ? 0 : ResponsiveSidebarWidth);
         Sidebar.Visibility = Header.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
         PlayerHeading.Visibility = _fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        MainContent.Margin = _fullscreen ? new(0) : _theaterMode && playing ? new(12) : new(24, 20, 24, 14);
+        PlayingTitleButton.Visibility = _fullscreen ? Visibility.Collapsed : Visibility.Visible;
+        MainContent.Margin = _fullscreen ? new(0) : _theaterMode && playing ? new(12) : new(20, 16, 20, 12);
         StatusPanel.Visibility = _fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        CommentColumn.Width = new(hideSide ? 0 : 360);
+        CommentColumn.Width = new(hideSide ? 0 : ResponsiveCommentWidth);
         CommentsPanel.Visibility = hideSide ? Visibility.Collapsed : Visibility.Visible;
         ShowSidePanelButton.Visibility = playing && hideSide && !_fullscreen ? Visibility.Visible : Visibility.Collapsed;
         PlayingChannelPanel.Visibility = RatingPanel.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;

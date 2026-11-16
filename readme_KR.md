@@ -1,4 +1,4 @@
-# FK_YT 1.1
+# FK_YT 1.3
 
 **[English guide](README.md)** · [한국어](readme_KR.md)
 
@@ -15,11 +15,12 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 *계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
 
-1.1.2 다운로드·설치·소스 접근은 [배포 안내](docs/RELEASE-1.1.2.md)와 [사용법·제한](docs/FEATURES-1.1.2.md)을 확인하세요. 아래 1.1 배포·검증 기록은 해당 과거 버전의 기록입니다.
+1.3 설치와 소스 다운로드는 [배포 안내](docs/RELEASE-1.3.md)를 확인하세요. 1.1.2 이후 변경 내용은 [1.3 패치노트](#13-13-패치노트)에 정리했습니다.
 
 <!-- PUBLICATION-STATUS-BEGIN -->
-> **1.1 배포 파일·검증 범위**
-> **[릴리스 파일과 접근 상태: FK_YT v1.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1)** 다운로드한 파일은 [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt)와 비교하세요. 설치·설치 후 실행과 재생·설치기 업데이트·제거는 **Windows 10/11에서 검증됐습니다**(제작자 확인, 2026-10-17). 설치 시간은 별도로 측정하지 않았습니다. [파일·검증 범위](docs/RELEASE-1.1.md), [1.1 변경 내용](docs/FEATURES-1.1.md), [라이선스 점검 기록](docs/LICENSING-1.1.md)을 확인해 주세요.
+> **[GitHub Releases의 FK_YT v1.3](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3)**
+>
+> [포터블 ZIP](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-portable.zip) · [Windows x64 설치기](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-Setup-x64.exe) · [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/SHA256SUMS.txt)
 <!-- PUBLICATION-STATUS-END -->
 
 ## 1. 언어 선택
@@ -50,7 +51,7 @@ FK_YT는 YouTube 웹페이지를 앱 안에 상주시켜 두지 않습니다. C#
 
 **이 수치는 개별 캐시와 요청의 설정값이며, 앱 전체 RAM·GPU 메모리·CPU 사용량의 상한이 아닙니다.** 실제 사용량은 해상도, 코덱, 디코더, 영상 길이와 실행 환경에 따라 달라집니다. Firefox보다 항상 적은 자원을 쓴다거나 자동재생이 완전히 무끊김이라고 보장하지 않습니다.
 
-1.1에는 라이브 상태 구분, 확인된 로컬 라이브 캐시 구간의 탐색과 LIVE 버튼을 추가했습니다. 영화관 모드에서 댓글·추천을 열어둘 수 있고, 일반·영화관 창의 하단 조작부를 접을 수 있습니다. 설정의 yt-dlp·Deno 업데이트는 **직접 실행하는 실험 기능**이며 앱을 다시 시작한 뒤 적용됩니다. Shorts는 광고로 명시된 제공 카드만 거르며, 모든 광고 형태를 찾아낸다고 보장하지 않습니다. 자세한 내용은 [1.1 기능과 한계](docs/FEATURES-1.1.md)에 적었습니다.
+FK_YT는 라이브 상태를 구분하며, 확인된 로컬 라이브 캐시 구간의 탐색과 LIVE 버튼을 제공합니다. 영화관 모드에서 댓글·추천을 열어둘 수 있고, 일반·영화관 창의 하단 조작부를 접을 수 있습니다. 설정의 yt-dlp·Deno 업데이트는 **직접 실행하는 실험 기능**이며 앱을 다시 시작한 뒤 적용됩니다. Shorts는 광고로 명시된 카드를 거릅니다. 이 기능을 처음 도입했을 때의 설명은 [1.1 기능 안내](docs/FEATURES-1.1.md)에서 볼 수 있습니다.
 
 라이브의 6 GiB는 **demuxer별 후방 캐시 예산이며 앱 전체 RAM 상한이나 미리 할당하는 양이 아닙니다.** 시청 전에 받은 적 없는 방송 구간을 가져오는 기능도 아닙니다. 로딩 뒤 늦게 라이브로 판별되고 다음 영상 준비를 이미 시도했다면 기존 버퍼 예산을 유지할 수 있으며, LIVE로 다시 열면 라이브 예산을 적용합니다.
 
@@ -90,7 +91,7 @@ FK_YT 코드랑 지금 보고 있는 이 글 전부 AI한테 시킴. 만들라�
 | 설정·시청 기록·이어보기 | 설치형은 Windows 사용자별 `%LOCALAPPDATA%\FK_YT\data`, 포터블은 압축 해제한 앱 폴더 안의 `data/`에 로컬 저장 |
 | 로그인 세션 | Firefox 프로필 또는 Netscape 형식 쿠키 파일에서 연결. 앱에 저장하는 세션은 Windows 사용자 계정에 묶어 DPAPI로 암호화 |
 | YouTube 요청 | 목록·재생·댓글 조회 등에 YouTube/Google 및 영상·이미지 CDN 사용. 로그인 기능에는 선택한 세션 사용 |
-| YouTube 시청 기록 | 일반 모드에서 기록 반영 설정이 켜져 있으면 실제 재생을 기준으로 계정 기록 전송 시도. 기본 설정은 켜짐 |
+| YouTube 시청 기록 | 전송은 기본 꺼짐. 일반 모드에서 전송하려면 **설정 → 기록 · 개인정보 → YouTube 계정에 시청 기록 전송**을 켭니다 |
 | 좋아요·싫어요·추천 피드백 | 사용자가 해당 동작을 선택하면 YouTube 계정에 요청 |
 | Return YouTube Dislike | 수치 조회 시 영상 ID로 RYD API 요청. 이 경로에는 앱의 YouTube 로그인 쿠키를 붙이지 않음 |
 | 수동 도구 확인·다운로드 | 설정에서 직접 요청했을 때 공식 HTTPS 서비스에 접속. YouTube 쿠키를 붙이지 않음 |
@@ -105,19 +106,19 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 ## 5. 실행 환경
 
 - 설치기가 허용하는 최소 조건: **Windows 10 22H2, 빌드 19045 이상, x64(AMD64)**. Windows 11 x64도 대상입니다. x86·ARM64는 설치 대상이 아닙니다. “Windows 10 전체 지원”이라는 뜻은 아닙니다.
-- 로컬 작업 환경: 개발 도구가 있는 **Windows 10 Pro 22H2 x64, 19045.6456** PC. **설치·설치 후 실행과 재생·설치기 업데이트·제거는 Windows 10/11에서 검증됐습니다**(제작자 확인, 2026-10-17). 추가 Windows 11 검증의 에디션·빌드와 초기화된 PC·표준 사용자 조건은 기록되지 않았으므로 그 범위까지 검증했다고 표현하지 않습니다.
+- 제작자는 2026-10-17에 Windows 10과 11에서 **1.1 버전**의 설치, 설치 후 실행·재생, 설치기 업데이트와 제거를 확인했습니다. 당시 Windows 10 작업 PC는 **Windows 10 Pro 22H2 x64, 빌드 19045.6456**이었습니다. [1.1 검증 기록](docs/RELEASE-1.1.md#verification-scope)
 - 설치 허용 조건과 공급자의 지원 정책은 별개입니다. 테스트한 Windows 10 Pro 22H2를 .NET 10의 공식 지원 환경이라고 주장하지 않습니다. 에디션·수명 주기는 [.NET 10 지원 OS 표](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)를 확인하세요.
 - 일반 사용자는 **.NET·Python·Deno·mpv·FFmpeg나 SDK를 따로 설치할 필요가 없습니다.** 실행에 쓰는 런타임·도구는 앱 폴더에 포함되어 있습니다. 설치기는 Windows 기본 64비트 PowerShell을 사용합니다.
 - 로그인 연결에는 Firefox 또는 직접 준비한 Netscape 형식 쿠키 파일을 사용합니다. 로그인 없이 검색·일부 영상 재생도 가능합니다.
 
-아래는 기존 런타임 묶음에서 보존한 번들 버전입니다. **1.1 포터블과 설치형은 같은 앱 DLL과 하나의 공통 앱 소스를 사용합니다.** 설치기가 `FK_YT.install-mode`를 추가해 Windows 사용자별 데이터 경로를 선택합니다. 예전 다운로드 대상을 기록한 [의존성 잠금 파일](dependencies.lock.json)만으로 만든 표가 아닙니다. 사용자가 수동 업데이트한 도구 버전은 이 표와 다를 수 있습니다.
+**1.3 포터블과 설치형은 같은 앱 DLL과 하나의 공통 앱 소스를 사용합니다.** 설치기가 `FK_YT.install-mode`를 추가해 Windows 사용자별 데이터 경로를 선택합니다. 아래는 1.3에 동봉한 버전입니다. 사용자가 수동 업데이트한 도구 버전은 이 표와 다를 수 있습니다.
 
 | 배포에 포함된 구성 요소 | 버전 / 빌드 | 역할 |
 | --- | --- | --- |
 | .NET / Windows Desktop Runtime | 둘 다 **10.0.13**, self-contained win-x64 | WPF 앱 실행 |
 | Python | **3.13.16**, embedded x64 | 목록·계정 등 작업자 |
-| yt-dlp EXE / Python 패키지 | **2026.08.19 / 2026.8.19** | 추출·메타데이터·다운로드 |
-| yt-dlp EXE 내부 Python | **3.10.11** | 위 작업자 Python과 별개의 번들 |
+| yt-dlp EXE / Python 패키지 | **2026.10.26** | 추출·메타데이터·다운로드 |
+| yt-dlp EXE 내부 Python | **3.14.10** | 위 작업자 Python과 별개의 번들 |
 | yt-dlp-ejs | **0.8.0** | JavaScript 처리 지원 |
 | Deno | **2.9.7** | JavaScript 런타임 |
 | mpv | **0.41.0-dev-gec38361c56-fkyt** | FK_YT에서 준비한 빌드; 영상 재생 |
@@ -131,11 +132,11 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 ### 일반 사용자: 어떤 파일을 받으면 되나요?
 
-**간단하게 쓰려면 `FK_YT-1.1-portable.zip`을 권장합니다.** 쓰기 가능한 새 폴더에 전부 압축을 풀고 `FK_YT` 안의 `FK_YT.exe`를 실행하면 되며, 이 경우 관리자 권한이 필요 없습니다. **두 방식의 탐색·재생 기능, 앱 DLL과 포함된 실행 도구는 같습니다.** 설치형은 시스템 공용 프로그램 설치·바로가기·Windows 제거 등록과 사용자별 데이터 경로를 선택하는 마커를 추가합니다. 어느 파일을 받든 배포 해시를 확인하세요.
+**간단하게 쓰려면 `FK_YT-1.3-portable.zip`을 권장합니다.** 쓰기 가능한 새 폴더에 전부 압축을 풀고 `FK_YT` 안의 `FK_YT.exe`를 일반 사용자 권한으로 실행하세요. **두 방식의 탐색·재생 기능, 앱 DLL과 포함된 실행 도구는 같습니다.** 설치형은 시스템 공용 프로그램 설치·바로가기·Windows 제거 등록과 사용자별 데이터 경로를 선택하는 마커를 추가합니다. 어느 파일을 받든 배포 해시를 확인하세요.
 
-배포 파일과 접근 상태는 [GitHub Releases의 FK_YT 1.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1)에서 확인하세요. 공개 릴리스 파일은 로그인 없이 받을 수 있습니다. `Code → Download ZIP`과 `FK_YT-1.1-source.zip`은 실행 패키지가 아닌 개발용 소스입니다.
+공개 릴리스 파일은 GitHub 로그인 없이 받을 수 있습니다. 앱을 사용하려면 포터블 ZIP이나 설치 EXE를 선택하세요. 소스 ZIP은 개발용입니다. [GitHub Releases의 FK_YT 1.3](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3)
 
-설치기의 중복 검사를 줄였습니다. 고정 payload 파일은 관리자 전용 보호 사본에서 전체 SHA-256을 한 번 검사하고, 같은 단계 안의 폴더 권한 처리를 재사용합니다. 경로·종류·길이 검사와 업데이트·제거 보호는 유지했습니다. 설치 후 전체 SHA 재검사가 없는 것은 이전부터의 동작입니다. **실제 정식 1.1 설치 시간을 측정하지 않았으므로 단축 초나 개선 비율을 주장하지 않습니다.**
+설치기는 보호된 임시 폴더의 고정 파일마다 SHA-256을 한 번 검사하고, 같은 단계 안에서 폴더 권한 확인 결과를 재사용합니다. 설치 중에는 파일 경로·종류·길이도 확인합니다.
 
 | 구분 | 설치형 EXE | 포터블 ZIP |
 | --- | --- | --- |
@@ -144,7 +145,7 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 | 관리자 권한 | 설치·제거에 필요; 앱은 일반 사용자 권한으로 실행 | 필요 없음; 쓰기 가능한 위치 사용 |
 | 바로가기 | 공용 시작 메뉴의 **FK_YT (System)**·**Uninstall FK_YT (System)**, 공용 바탕화면은 선택 사항(기본 꺼짐) | 자동 생성하지 않음 |
 | 데이터 | 실행한 Windows 사용자별 `%LOCALAPPDATA%\FK_YT\data` | `<압축 해제한 FK_YT 폴더>\data` |
-| 제거 | Windows 앱 제거·**Uninstall FK_YT (System)**·설치된 `Uninstall.exe`; 프로필 데이터 보존 | 앱을 닫고 폴더 삭제; `data`도 지우면 데이터까지 삭제됨 |
+| 제거 | Windows 앱 제거·**Uninstall FK_YT (System)**·설치된 `Uninstall.exe` 사용. 프로필 데이터 보존 | 트레이 아이콘에서 **종료**한 뒤 폴더 삭제. `data`도 지우면 데이터까지 삭제됨 |
 
 폴더 선택 화면은 native 64비트 Program Files 바로 아래의 빈 앱 폴더나 이 설치기가 관리하는 기존 시스템 설치본만 허용합니다. 포터블·예전 사용자별 설치본을 자동 이전하지 않으며 그 위 설치도 거부합니다. 설치 경로는 100자 이내여야 합니다. 관리자 설치기가 앱을 자동 실행하지는 않습니다. `runtime/`, `worker/`, DLL·라이선스 고지·설치형 마커는 그대로 두세요.
 
@@ -152,47 +153,45 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 ### 업데이트와 데이터 보존
 
-- **설치형:** 앱을 종료하고 호환되는 새 시스템 설치기를 관리자 권한으로 실행해 기존 시스템 설치 위치를 선택합니다. 구현은 사용자별 프로필 데이터·추가 파일을 보존하며, 호환되지 않거나 변경되었거나 실행 중인 설치본은 거부할 수 있습니다. 설치기 업데이트는 Windows 10/11에서 검증됐습니다(제작자 확인, 2026-10-17). 별도 실험 기능인 yt-dlp·Deno 업데이트의 검증을 뜻하지는 않습니다. 앱 자동 온라인 업데이트는 없습니다. 별도의 실험적 도구 업데이트는 직접 요청하며 재시작 뒤 적용합니다.
-- **포터블:** 앱을 종료하고 기존 폴더를 먼저 보관합니다. 새 ZIP은 별도의 빈 폴더에 풀고, 보관한 `data/`를 새 `FK_YT/` 안에 복사한 뒤 실행하세요.
+- **설치형**은 앱을 완전히 종료하고 호환되는 새 시스템 설치기를 관리자 권한으로 실행해 기존 시스템 설치 위치를 선택합니다. 설치기는 사용자별 프로필 데이터와 추가 파일을 보존합니다. 호환되지 않거나 변경되었거나 실행 중인 설치본은 거부할 수 있습니다. 제작자는 2026-10-17에 Windows 10과 11에서 1.1 설치기의 업데이트 동작을 확인했습니다. 별도 실험 기능인 yt-dlp·Deno 업데이트는 직접 요청하며 재시작 뒤 적용합니다.
+- **포터블**은 앱을 완전히 종료하고 기존 폴더를 먼저 보관합니다. 새 ZIP은 별도의 빈 폴더에 풀고, 보관한 `data/`를 새 `FK_YT/` 안에 복사한 뒤 실행하세요.
 - **포터블·예전 사용자별 설치본에서 이동:** 자동으로 가져오지 않습니다. 두 앱을 모두 닫고 원본 데이터를 보관한 뒤, 설치를 마치고 원래 Windows 사용자로 **빈** `%LOCALAPPDATA%\FK_YT\data`에 복사합니다. SQLite DB를 병합하거나 이미 사용 중인 데이터 폴더에 덮어쓰지 마세요. 예전 사용자별 앱·바로가기·데이터는 별도로 남습니다.
 - 로그인 정보는 Windows 사용자 계정에 묶여 있습니다. 다른 PC·Windows 계정으로 옮기면 로그인 연결을 다시 해야 할 수 있습니다.
 
 ### 제거할 때 무엇이 남나요?
 
-Windows **설정 → 앱 → FK_YT → 제거**, 시작 메뉴의 **Uninstall FK_YT (System)** 또는 설치된 `Uninstall.exe`를 실행하고 관리자 요청을 승인합니다. 시스템 제거기는 변경되지 않은 소유 프로그램 파일·공용 바로가기·시스템 등록만 제거하도록 구현했습니다. **모든 사용자의 설정·로그인 정보·시청 기록·이어보기·다운로드는 항상 보존하며, 사용자 데이터 삭제 체크박스는 없습니다.** 다른 사용자의 프로필도 검색하지 않습니다. 직접 추가·변경했거나 잠긴 프로그램 폴더 파일은 남을 수 있습니다. 제거 동작은 Windows 10/11에서 검증됐습니다(제작자 확인, 2026-10-17).
+FK_YT를 완전히 종료한 뒤 Windows **설정 → 앱 → FK_YT → 제거**, 시작 메뉴의 **Uninstall FK_YT (System)** 또는 설치된 `Uninstall.exe`를 실행하고 관리자 요청을 승인합니다. 시스템 제거기는 변경되지 않은 소유 프로그램 파일·공용 바로가기·시스템 등록을 제거합니다. **모든 사용자의 설정·로그인 정보·시청 기록·이어보기·다운로드는 보존합니다.** 직접 추가·변경했거나 잠긴 프로그램 폴더 파일은 남을 수 있습니다. 제작자는 2026-10-17에 Windows 10과 11에서 1.1 제거 동작을 확인했습니다.
 
-자신의 설치형 데이터도 따로 지우려면 앱을 닫고 필요한 내용을 보관한 뒤 자신의 `%LOCALAPPDATA%\FK_YT\data`를 삭제하세요. 해당 프로필의 저장 로그인·기록도 삭제됩니다. 다른 위치의 다운로드와 예전 포터블·사용자별 폴더의 데이터는 별도입니다. 제거 후 Program Files에 추가·수정 파일이 남으면 먼저 보관하고, 다시 설치할 때는 허용 범위의 빈 폴더를 사용하세요.
+자신의 설치형 데이터도 따로 지우려면 앱을 완전히 종료하고 필요한 내용을 보관한 뒤 자신의 `%LOCALAPPDATA%\FK_YT\data`를 삭제하세요. 해당 프로필의 저장 로그인·기록도 삭제됩니다. 다른 위치의 다운로드와 예전 포터블·사용자별 폴더의 데이터는 별도입니다. 제거 후 Program Files에 추가·수정 파일이 남으면 먼저 보관하고, 다시 설치할 때는 허용 범위의 빈 폴더를 사용하세요.
 
 ### 파일 확인과 다운로드 명령
 
-설치기는 게시자 코드 서명 없이 제공합니다. 실제 배포 다운로드 후의 SmartScreen 경고 유무·문구는 시험하지 않았으므로 특정 경고가 반드시 뜬다고 단정하지 않습니다. [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.1/SHA256SUMS.txt)와 [배포 파일 목록](docs/RELEASE-1.1.md#files-and-hashes)을 사용하세요. 예를 들어 PowerShell에서 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.1-Setup-x64.exe'`를 실행하고 릴리스 해시와 비교합니다. 해시는 파일 일치 확인용이며 코드 서명을 대신하지는 않습니다.
+설치기는 게시자 코드 서명 없이 제공합니다. PowerShell에서 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.3-Setup-x64.exe'`를 실행하고 해당 파일에 기재된 해시와 비교하세요. [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/SHA256SUMS.txt) · [배포 파일 목록](docs/RELEASE-1.3.md#release-files)
 
-아래 GitHub CLI 명령은 릴리스 페이지에 있는 `v1.1` 파일을 요청합니다. 공개 릴리스 페이지에서 로그인 없이 직접 다운로드해도 됩니다.
+아래 GitHub CLI 명령은 릴리스 페이지에 있는 `v1.3` 파일을 요청합니다.
 
 ```powershell
-gh release view v1.1 --repo mobsweeper/FK_YT
-gh release download v1.1 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.1-portable.zip' --dir .\FK_YT-download
+gh release view v1.3 --repo mobsweeper/FK_YT
+gh release download v1.3 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3-portable.zip' --dir .\FK_YT-download
 # 설치형을 원하면 위 다운로드 대신:
-gh release download v1.1 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.1-Setup-x64.exe' --dir .\FK_YT-download
+gh release download v1.3 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3-Setup-x64.exe' --dir .\FK_YT-download
 ```
 
 ### 개발자: 저장소 빌드와 최종 배포본은 구분해 주세요
 
-**`FK_YT-1.1-source.zip`은 포터블과 설치형이 함께 사용하는 제품 소스입니다.** 공개 소스에는 테스트 프로젝트·내부 검토 기록·로컬 검증 산출물을 넣지 않았습니다. 일반 오류 처리와 프로세스 정리는 유지했습니다. 설치기는 별도 `FK_YT-1.1-installer-source.zip`을 사용합니다. [빌드 안내](docs/BUILD-1.1.md)와 [소스·빌드 범위](docs/RELEASE-1.1.md#source-and-build-boundaries)를 참고하세요.
+**`FK_YT-1.3-source.zip`은 포터블과 설치형이 함께 사용하는 제품 소스입니다.** 설치기 소스는 별도 `FK_YT-1.3-installer-source.zip`에 있습니다. [소스와 빌드 안내](docs/RELEASE-1.3.md#source-and-build)
 
 저장소 앱을 컴파일하려면 Git, **PowerShell 7**, 인터넷이 필요합니다. Git으로 공개 저장소를 복제할 때는 GitHub 로그인이 필요 없습니다. 일반 사용자는 이 과정을 할 필요가 없습니다.
 
 ```powershell
 git clone https://github.com/mobsweeper/FK_YT.git
 Set-Location FK_YT
-git checkout v1.1
+git checkout v1.3
 pwsh -NoProfile -File .\scripts\Bootstrap.ps1 -Component Dotnet
 pwsh -NoProfile -File .\scripts\Build.ps1
 ```
 
 이 명령은 프로젝트 내부에 SDK를 준비하고 앱을 빌드합니다. 실행용 외부 도구를 전부 준비하는 명령은 아닙니다. `Bootstrap.ps1`의 전체 실행과 `Bootstrap-Ffmpeg.ps1`은 **예전 공급사 mpv·FFmpeg**를 준비하므로 최종 라이선스 정리 런타임 복원용으로 사용하면 안 됩니다. `Publish.ps1`은 준비된 개발용 런타임으로 새 `dist/` 하위 폴더에 self-contained 실행 폴더를 만들지만, 최종 라이선스 정리 패키지·NSIS 설치기·GitHub 릴리스를 만들지는 않습니다. 해시 검증을 끄지 말고 다운로드·검증 실패 원인을 확인하세요.
-
-[배포 검증 범위](docs/RELEASE-1.1.md#verification-scope)는 이전 preview6 검사와 최종 1.1 산출물 검사를 구분합니다. 소스 공개와 컴파일 성공이 실제 재생·계정 호환성·설치·장시간 동작까지 입증하지는 않습니다.
 
 도구 설치 안내: [PowerShell](https://learn.microsoft.com/en-us/powershell/scripting/install/install-powershell-on-windows) · [Git](https://git-scm.com/install/windows) · [GitHub CLI](https://github.com/cli/cli#installation)
 
@@ -207,7 +206,7 @@ pwsh -NoProfile -File .\scripts\Build.ps1
 3. 새 프로필을 만든 뒤, 평소 프로필이 계속 기본값인지 확인합니다. 필요하면 기존 프로필에서 **기본 프로필로 설정**을 누릅니다.
 4. 새 프로필의 **새 브라우저에서 프로필 실행 / Launch profile in new browser**를 눌러 엽니다.
 5. 그 창에서 YouTube에 로그인합니다. 전용 프로필에는 다른 사이트 로그인을 추가하거나 기존 프로필 데이터를 가져오지 않는 편이 목적에 맞습니다. Mozilla 계정 동기화는 필수가 아닙니다.
-6. FK_YT의 **설정 · 로그인**에서 해당 프로필을 고르고 **Firefox 세션 연결 / 갱신**을 누릅니다.
+6. FK_YT의 **설정 → 계정 · 채널**에서 해당 프로필을 고르고 Firefox 세션을 연결하거나 갱신합니다.
 7. 목록에 없다면 **프로필 폴더 선택**을 누릅니다. `about:profiles`에 표시된 새 프로필의 **루트 디렉터리**를 선택하세요. 캐시용 로컬 디렉터리와 다릅니다.
 
 프로필 관리 기능의 자세한 설명은 [Mozilla 공식 안내](https://support.mozilla.org/en-US/kb/profile-manager-create-remove-switch-firefox-profiles)를 참고하세요. 로그인 연결이 만료되면 전용 프로필에서 다시 로그인한 뒤 FK_YT에서 갱신합니다.
@@ -220,8 +219,9 @@ pwsh -NoProfile -File .\scripts\Build.ps1
 - 기본 화질은 **최고 화질 (자동)**입니다. 숫자 화질은 해당 해상도 이하로 제한합니다. 영상에 그 해상도가 없으면 제한 이하에서 사용 가능한 화질을 선택합니다.
 - **자막 ▾**에서 끄기·제작자 자막·자동 생성 및 번역 항목을 선택합니다. 지원 언어는 해당 영상이 제공하는 목록에 따르며 영어·한국어·일본어를 우선 표시합니다.
 - **댓글 보기**를 눌러야 댓글을 조회합니다. 인기순·최신순을 선택할 수 있습니다.
-- 다음 영상 자동재생을 켜면 목록의 다음 항목으로 넘어갑니다. 다음 영상 준비에 실패하면 일반 로딩으로 이어질 수 있습니다.
-- **팝아웃**으로 별도 창을 열고 **복귀**로 돌려놓습니다. 영화관 모드에서도 댓글·추천을 열어둘 수 있습니다. 일반·영화관 창의 하단 조작부는 접기·복원이 가능하고, 선택은 현재 앱 세션 동안 유지됩니다. 전체화면·팝아웃에서는 유휴 시 조작부가 숨겨집니다.
+- 영상 카드를 우클릭해 **다음에 재생** 또는 **대기열 끝에 추가**를 선택하면 대기열을 직접 만들 수 있습니다. 다음 영상 자동재생을 켜면 대기열 순서대로 이어서 재생합니다.
+- **팝아웃**으로 별도 창에서 재생을 계속하면서 메인 창을 탐색할 수 있습니다. **복귀**로 플레이어를 돌려놓습니다. 영화관 모드에서도 댓글·추천을 열어둘 수 있습니다. 일반·영화관 창의 하단 조작부는 접었다가 펼 수 있고, 전체화면·팝아웃에서는 유휴 시 숨겨집니다.
+- 메인 창의 **X**를 누르면 FK_YT가 Windows 알림 영역에 들어갑니다. 트레이 아이콘에서 창 복원, 재생·일시정지, 다음 영상 이동이 가능합니다. 업데이트·백업·제거 전에는 트레이에서 **종료**를 선택하세요.
 - **공유** 또는 영상 카드 우클릭으로 영상 링크를 복사합니다. **다운로드**는 사용 권한이 있는 콘텐츠에 사용하세요.
 - 로컬 이어보기와 YouTube 계정의 기록은 별개입니다. 기록 전송이 성공해도 정확한 재생 위치 동기화는 보장하지 않으며, YouTube에는 완주로 표시될 수 있습니다.
 
@@ -241,9 +241,9 @@ README.md              메인 화면의 영문·한국어 README
 readme_KR.md            한국어 안내
 readme_EN.md            English guide
 assets/screenshots/    계정 정보를 가린 README 스크린샷
-docs/RELEASE-1.1.md     배포 파일·해시·대응 소스·검증 범위
-docs/FEATURES-1.1.md    1.1 기능·알려진 한계
-docs/BUILD-1.1.md       컴파일·Publish·최종 배포 조립 구분
+docs/RELEASE-1.3.md     배포 파일·해시·설치·대응 소스
+docs/RELEASE-1.1.2.md   이전 배포 기록
+docs/BUILD-1.1.2.md     이전 버전 빌드·배포 조립 안내
 src/                    C# WPF 앱, 플레이어 제어, 계정·저장 서비스
 worker/                 제품 Python 작업자
 scripts/                개발용 의존 도구 준비·빌드·로컬 Publish
@@ -251,7 +251,7 @@ dependencies.lock.json  개발 도구와 과거 공급사 런타임의 잠금 �
 LICENSE / license.md    MIT 라이선스·배포 안내
 ```
 
-`tools/`, `runtime/`, `dist/`, `data/`는 로컬 빌드·실행 과정에서 생기는 폴더입니다. 설치기 소스는 별도 `FK_YT-1.1-installer-source.zip`으로 준비되어 있으며, 이 저장소에는 없습니다. 사용자 데이터나 개인백업은 배포 파일에 포함하지 않습니다.
+`tools/`, `runtime/`, `dist/`, `data/`는 로컬 빌드·실행 과정에서 생기는 폴더입니다. 설치기 소스는 별도 `FK_YT-1.3-installer-source.zip`으로 받을 수 있습니다. 사용자 데이터나 개인백업은 배포 파일에 포함하지 않습니다.
 
 ## 9. 제한 사항
 
@@ -297,11 +297,11 @@ yt-dlp 소스와 번들 EXE의 구분은 [프로젝트의 라이선스 설명](h
 
 최종 mpv는 원본 커밋에 빌드 식별용 버전 메타데이터 변경을 적용해 FK_YT에서 만든 바이너리입니다. FFmpeg는 MSYS2 UCRT64 빌드와 해당 의존 라이브러리 묶음입니다. 예전 Bootstrap의 shinchiro/Gyan 바이너리와 같다고 표시하지 않습니다. 원본과 수정 부분의 고지·빌드 지침을 함께 보존했습니다.
 
-대응 소스는 **FK_YT에서 준비한 모음**인 `FK_YT_yt-dlp.zip`, `FK_YT_mpv-FFmpeg-part1.zip`, `FK_YT_mpv-FFmpeg-part2.zip`으로 제공합니다. 각 프로젝트가 직접 배포한 공식 ZIP이라는 뜻은 아닙니다. 미디어 두 파일은 분할 압축 볼륨이 아닌 **독립 ZIP**이므로 둘 다 받아 **같은 폴더에 part1 → part2 순서로** 풉니다. 앱 실행에는 이 소스 ZIP이 필요하지 않습니다.
+동봉한 yt-dlp 2026.10.26의 대응 소스는 1.3 앱 소스 ZIP에 포함합니다. mpv와 FFmpeg의 대응 소스는 FK_YT에서 준비한 v1.1.2 미디어 소스 모음 두 개입니다. 두 파일은 **독립 ZIP**입니다. 둘 다 받아 **같은 폴더에 part1 → part2 순서로** 푸세요. [1.3 앱 소스](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-source.zip) · [미디어 part 1](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part1.zip) · [미디어 part 2](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part2.zip)
 
-1.1 바이너리와 대응 소스의 파일 목록·접근 상태는 같은 [v1.1 릴리스](https://github.com/mobsweeper/FK_YT/releases/tag/v1.1)에서 확인할 수 있습니다. 별도 소스 접근 비용을 받지 않습니다. 재배포할 때도 실행 파일과 대응 소스를 함께 접근할 수 있게 유지해야 합니다. [배포 안내](docs/RELEASE-1.1.md)에 공통 앱 소스·별도 설치기 소스·해시를 적었습니다. [라이선스 점검 기록](docs/LICENSING-1.1.md), [소스 접근·파일 대응표](docs/SOURCE-ACCESS-1.1.txt), [추가 라이선스 고지](docs/LICENSES-SUPPLEMENT-1.1.txt)에서 구성 요소별 조건·압축 파일 대응 관계·남은 한계를 안내하며, 원래 법적 고지는 보존합니다. 두 텍스트 고지는 릴리스에도 첨부합니다.
+1.3 배포 안내에서 앱·설치기 소스, 해시, 번들 도구의 대응 소스를 확인할 수 있습니다. 별도 소스 접근 비용을 받지 않습니다. 재배포할 때도 실행 파일과 대응 소스를 함께 접근할 수 있게 유지해야 합니다. v1.1.2의 소스 대응표에는 그대로 사용하는 미디어 ZIP 두 개와 해시가 적혀 있습니다. [1.3 배포 안내](docs/RELEASE-1.3.md#corresponding-source) · [v1.1.2 소스 대응표](docs/SOURCE-ACCESS-1.1.2.txt) · [추가 라이선스 고지](docs/LICENSES-SUPPLEMENT-1.1.txt)
 
-소스 모음의 배포자 메타데이터·깨진 링크를 복구하고 출처를 기록한 법적 고지 파일 6개를 추가했습니다. native Windows 빌드에 쓰이지 않는 macOS 전용 crate ZIP 4개는 제외했으며, 플랫폼 공통 upstream 잠금 파일은 그대로 보존합니다. 복구 근거가 없는 과거 URL은 추측하지 않고 미확보로 명시했습니다. 유지한 upstream 소스·법적 고지와 앱 코드·빌드 입력이 바뀌지 않았는지도 대조했습니다.
+이전 미디어 소스 배포 당시 배포자 메타데이터·깨진 링크를 복구하고 출처를 기록한 법적 고지 파일 6개를 추가했습니다. native Windows 빌드에 쓰이지 않는 macOS 전용 crate ZIP 4개는 제외했으며, 플랫폼 공통 upstream 잠금 파일은 그대로 보존했습니다. 복구 근거가 없는 과거 URL은 미확보로 표기했습니다. [당시 라이선스 점검 기록](docs/LICENSING-1.1.md)
 
 **전체 외부 바이너리의 동일 바이트 재빌드와 공급사의 정확한 과거 librsvg 잠금 파일 복원은 완료하지 않았습니다.** 대응 소스 파일의 접근 상태는 릴리스 페이지에서 확인하세요. simd_helpers 고지는 upstream의 후속 고지임을 표시했으며 원래 crate에 들어 있던 파일이라고 주장하지 않습니다. 정확한 범위와 남은 한계는 라이선스 점검 기록과 배포 안내에 구분했으며, 이 점검이 법적 적합성 보증을 뜻하지는 않습니다.
 
@@ -317,3 +317,13 @@ yt-dlp 소스와 번들 EXE의 구분은 [프로젝트의 라이선스 설명](h
 2026-10-19까지 완료된 병렬 검토 **22라운드 × 15개 검토 작업**을 2026-10-20에 확인한 기준. 기존 약 195회에 완료된 9라운드(135회)를 더했습니다. 같은 에이전트에게 다시 맡긴 것도 포함했고, 실패한 검토 요청의 재시도·메인의 자체 점검·외부 단독 리뷰·개별 추가 질문은 제외했습니다. 서로 다른 AI 330종이라는 뜻도, 버그 330개를 고쳤다는 뜻도 아님 ㅋㅋ
 
 *정적 코드 검사만 집계한 횟수입니다. 실제 실행·재생 등을 확인한 동적 검사는 집계 불가.*
+
+## 13. 1.3 패치노트
+
+- 재생할 때 선택한 YouTube 계정을 확인하고, 해당 계정의 호환 HLS 스트림으로 복구하는 경로를 추가했습니다.
+- 현재 영상 재생과 다음 영상 준비의 원본 음성 선택을 개선했습니다.
+- 사용자 대기열과 Windows 트레이 조작을 추가했습니다. 트레이에서 재생·일시정지, 다음 영상, 창 복원, 종료를 선택할 수 있습니다.
+- 팝아웃 재생을 유지하면서 메인 창을 탐색할 수 있습니다.
+- 영상이 로딩 직후 끝나는 경우의 자동재생과 대기열 처리를 개선했습니다.
+- 창 너비에 따라 사이드바를 줄이고 채널 선택 목록을 띄웁니다. 연결 후 전체 채널 목록을 유지하고, 계정 버튼이 비활성화된 상태에서도 상태 도움말을 표시합니다.
+- 번들 yt-dlp를 **2026.10.26**으로 업데이트했습니다. 독립 실행 파일에는 Python **3.14.10**이 포함됩니다.

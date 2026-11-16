@@ -13,7 +13,10 @@ import urllib.parse
 import io
 from contextlib import redirect_stdout, redirect_stderr
 
-from youtube_session import MAX_LINE, create_youtube_dl, validate_account_context
+from youtube_session import MAX_LINE, SessionError, create_youtube_dl, require_cookie_lease, validate_account_context
+
+
+WATCH_URL = re.compile(r"https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}")
 
 
 def _caption_language(value):
@@ -216,6 +219,12 @@ def run(argv=None):
         status, failure = 1, exc
     if status:
         code = classify_error(errors.getvalue() + "\n" + (str(failure) if failure else ""))
+        if isinstance(failure, SessionError):
+            if failure.code != "network":
+                code = "session"
+            elif code == "generic":
+                # Preserve a specific upstream reason for a missing response.
+                code = "network"
         print("FK_YT_ERROR:" + code, file=sys.stderr)
         return 1
     # Only withheld non-progress data remains. Avoid cloning the complete JSON
@@ -245,19 +254,32 @@ def main(argv=None):
     if not line or len(line) > MAX_LINE:
         raise ValueError("Invalid account request")
     request = json.loads(line)
-    if not isinstance(request, dict) or set(request) not in ({"accountContext"}, {"accountContext", "operation"}) or request.get("operation") not in (None, "subtitle_catalog"):
+    if (not isinstance(request, dict)
+            or set(request) not in ({"accountContext"}, {"accountContext", "operation"})
+            or request.get("operation") not in (None, "subtitle_catalog", "verified_playback")):
         raise ValueError("Invalid account request")
     account = validate_account_context(request["accountContext"])
+    verified_playback = request.get("operation") == "verified_playback"
     parsed = yt_dlp.parse_options(argv)
     plugin_dirs.value = parsed.options.plugin_dirs
     parsed.ydl_opts["cachedir"] = False
     if not parsed.urls:
         raise ValueError("Missing video URL")
+    if verified_playback:
+        if account is None or len(parsed.urls) != 1 or WATCH_URL.fullmatch(parsed.urls[0]) is None:
+            raise ValueError("Invalid account request")
+        require_cookie_lease(parsed.ydl_opts.get("cookiefile"))
+        parsed.ydl_opts.update({"allowed_extractors": ["youtube"], "cookiesfrombrowser": None,
+            "simulate": True, "skip_download": True, "mark_watched": False,
+            "getcomments": False, "ignoreerrors": False})
+        plugin_dirs.value = []
     if parsed.options.ffmpeg_location:
         FFmpegPostProcessor._ffmpeg_location.set(parsed.options.ffmpeg_location)
     # All callers explicitly ignore configs and plugins. Parsing through the
     # pinned release retains yt-dlp's normal format/subtitle/download options.
-    with create_youtube_dl(parsed.ydl_opts, account) as ydl:
+    downloader = (create_youtube_dl(parsed.ydl_opts, account, verified_playback=True)
+                  if verified_playback else create_youtube_dl(parsed.ydl_opts, account))
+    with downloader as ydl:
         try:
             if request.get("operation") == "subtitle_catalog":
                 # Prevent forced CLI output from publishing the large original
@@ -272,7 +294,12 @@ def main(argv=None):
                 metadata = ydl.extract_info(parsed.urls[0], download=False)
                 print(json.dumps(compact_subtitle_catalog(metadata), ensure_ascii=False))
                 return 0
-            return ydl.download(parsed.urls)
+            result = ydl.download(parsed.urls)
+            if verified_playback and not result:
+                ie = ydl.get_info_extractor("Youtube")
+                if not ie.is_authenticated or getattr(ie, "_fk_account_context", None) != account:
+                    raise SessionError("auth")
+            return result
         finally:
             # The context manager owns the one close call. Its temporary lease
             # must remain usable during extraction but must never be resaved.
@@ -318,8 +345,7 @@ def run_live_fragment_stream(argv):
         IN_CLI.value = True
         parsed = yt_dlp.parse_options(argv)
         plugin_dirs.value = []
-        if (len(parsed.urls) != 1 or re.fullmatch(
-                r"https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}", parsed.urls[0]) is None):
+        if len(parsed.urls) != 1 or WATCH_URL.fullmatch(parsed.urls[0]) is None:
             raise ValueError("Invalid video URL")
         # A caller-supplied general CLI output format cannot redirect bytes to a
         # file, concatenate two never-ending tracks, or print JSON into media.
