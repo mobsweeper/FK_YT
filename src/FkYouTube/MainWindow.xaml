@@ -721,7 +721,6 @@
                     </WrapPanel>
                     <TextBlock x:Name="RatingState" Text="{local:Loc Ko='내 평가 확인 대기', En='Rating not checked', Ja='自分の評価の確認待ち'}" Visibility="Collapsed"/>
                     <TextBlock x:Name="DislikeStatsState" Text="{local:Loc Ko='RYD 수치 조회 대기', En='RYD counts not loaded', Ja='RYD 件数の取得待ち'}" Visibility="Collapsed"/>
-                    <Button x:Name="RydAttributionButton" Content="Return YouTube Dislike ↗" Click="RydAttribution_Click" Visibility="Collapsed"/>
                     <TextBlock x:Name="LikeTooltipText" Visibility="Collapsed">
                       <TextBlock.Text>
                         <MultiBinding Converter="{StaticResource LikeTooltipFormat}">

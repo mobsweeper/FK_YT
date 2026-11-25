@@ -476,8 +476,6 @@ public sealed partial class SessionService
             _activeMutation?.Capture(file);DeleteSessionFile(file);_activeMutation?.Changed(file);
         }
     }
-    public static IReadOnlyList<FirefoxProfile> ListFirefoxProfiles()
-        =>ListFirefoxProfiles(out _);
     public static IReadOnlyList<FirefoxProfile> ListFirefoxProfiles(out string? warning)
         =>ListFirefoxProfiles(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Mozilla","Firefox"),out warning);
     private static IReadOnlyList<FirefoxProfile> ListFirefoxProfiles(string root,out string? warning)

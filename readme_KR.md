@@ -1,4 +1,4 @@
-# FK_YT 1.3
+# FK_YT 1.3.1
 
 **[English guide](README.md)** · [한국어](readme_KR.md)
 
@@ -15,12 +15,12 @@ Windows용 개인 YouTube 뷰어. 웹페이지 대신 필요한 목록과 플레
 
 *계정 정보와 일부 썸네일은 가렸습니다. 화면 속 영상·이미지의 권리는 각 권리자에게 있습니다.*
 
-1.3 설치와 소스 다운로드는 [배포 안내](docs/RELEASE-1.3.md)를 확인하세요. 1.1.2 이후 변경 내용은 [1.3 패치노트](#13-13-패치노트)에 정리했습니다.
+1.3.1 설치와 소스 다운로드는 [배포 안내](docs/RELEASE-1.3.1.md)를 확인하세요. 이번에 고친 내용은 [1.3.1 패치노트](#14-131-패치노트)에 정리했습니다.
 
 <!-- PUBLICATION-STATUS-BEGIN -->
-> **[GitHub Releases의 FK_YT v1.3](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3)**
+> **[GitHub Releases의 FK_YT v1.3.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3.1)**
 >
-> [포터블 ZIP](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-portable.zip) · [Windows x64 설치기](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-Setup-x64.exe) · [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/SHA256SUMS.txt)
+> [포터블 ZIP](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/FK_YT-1.3.1-portable.zip) · [Windows x64 설치기](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/FK_YT-1.3.1-Setup-x64.exe) · [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/SHA256SUMS.txt)
 <!-- PUBLICATION-STATUS-END -->
 
 ## 1. 언어 선택
@@ -111,16 +111,16 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 - 일반 사용자는 **.NET·Python·Deno·mpv·FFmpeg나 SDK를 따로 설치할 필요가 없습니다.** 실행에 쓰는 런타임·도구는 앱 폴더에 포함되어 있습니다. 설치기는 Windows 기본 64비트 PowerShell을 사용합니다.
 - 로그인 연결에는 Firefox 또는 직접 준비한 Netscape 형식 쿠키 파일을 사용합니다. 로그인 없이 검색·일부 영상 재생도 가능합니다.
 
-**1.3 포터블과 설치형은 같은 앱 DLL과 하나의 공통 앱 소스를 사용합니다.** 설치기가 `FK_YT.install-mode`를 추가해 Windows 사용자별 데이터 경로를 선택합니다. 아래는 1.3에 동봉한 버전입니다. 사용자가 수동 업데이트한 도구 버전은 이 표와 다를 수 있습니다.
+**1.3.1 포터블과 설치형은 같은 앱 DLL과 하나의 공통 앱 소스를 사용합니다.** 설치기가 `FK_YT.install-mode`를 추가해 Windows 사용자별 데이터 경로를 선택합니다. 아래는 1.3.1에 동봉한 버전입니다. 사용자가 수동 업데이트한 도구 버전은 이 표와 다를 수 있습니다.
 
 | 배포에 포함된 구성 요소 | 버전 / 빌드 | 역할 |
 | --- | --- | --- |
 | .NET / Windows Desktop Runtime | 둘 다 **10.0.13**, self-contained win-x64 | WPF 앱 실행 |
 | Python | **3.13.16**, embedded x64 | 목록·계정 등 작업자 |
-| yt-dlp EXE / Python 패키지 | **2026.10.26** | 추출·메타데이터·다운로드 |
+| yt-dlp EXE / Python 패키지 | **2026.11.23** | 추출·메타데이터·다운로드 |
 | yt-dlp EXE 내부 Python | **3.14.10** | 위 작업자 Python과 별개의 번들 |
 | yt-dlp-ejs | **0.8.0** | JavaScript 처리 지원 |
-| Deno | **2.9.7** | JavaScript 런타임 |
+| Deno | **2.9.8** | JavaScript 런타임 |
 | mpv | **0.41.0-dev-gec38361c56-fkyt** | FK_YT에서 준비한 빌드; 영상 재생 |
 | FFmpeg / ffprobe | **9.0.2**, MSYS2 UCRT64 `9.0.2-1` | GPLv3 활성화 공유 라이브러리 빌드 |
 | Microsoft.Data.Sqlite / SQLitePCLRaw | **10.0.13 / 3.0.5** | 로컬 DB |
@@ -132,9 +132,9 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 
 ### 일반 사용자: 어떤 파일을 받으면 되나요?
 
-**간단하게 쓰려면 `FK_YT-1.3-portable.zip`을 권장합니다.** 쓰기 가능한 새 폴더에 전부 압축을 풀고 `FK_YT` 안의 `FK_YT.exe`를 일반 사용자 권한으로 실행하세요. **두 방식의 탐색·재생 기능, 앱 DLL과 포함된 실행 도구는 같습니다.** 설치형은 시스템 공용 프로그램 설치·바로가기·Windows 제거 등록과 사용자별 데이터 경로를 선택하는 마커를 추가합니다. 어느 파일을 받든 배포 해시를 확인하세요.
+**간단하게 쓰려면 `FK_YT-1.3.1-portable.zip`을 권장합니다.** 쓰기 가능한 새 폴더에 전부 압축을 풀고 `FK_YT` 안의 `FK_YT.exe`를 일반 사용자 권한으로 실행하세요. **두 방식의 탐색·재생 기능, 앱 DLL과 포함된 실행 도구는 같습니다.** 설치형은 시스템 공용 프로그램 설치·바로가기·Windows 제거 등록과 사용자별 데이터 경로를 선택하는 마커를 추가합니다. 어느 파일을 받든 배포 해시를 확인하세요.
 
-공개 릴리스 파일은 GitHub 로그인 없이 받을 수 있습니다. 앱을 사용하려면 포터블 ZIP이나 설치 EXE를 선택하세요. 소스 ZIP은 개발용입니다. [GitHub Releases의 FK_YT 1.3](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3)
+공개 릴리스 파일은 GitHub 로그인 없이 받을 수 있습니다. 앱을 사용하려면 포터블 ZIP이나 설치 EXE를 선택하세요. 소스 ZIP은 개발용입니다. [GitHub Releases의 FK_YT 1.3.1](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3.1)
 
 설치기는 보호된 임시 폴더의 고정 파일마다 SHA-256을 한 번 검사하고, 같은 단계 안에서 폴더 권한 확인 결과를 재사용합니다. 설치 중에는 파일 경로·종류·길이도 확인합니다.
 
@@ -154,7 +154,7 @@ RYD와 YouTube 등 접속한 서비스는 일반 네트워크 요청의 IP 주�
 ### 업데이트와 데이터 보존
 
 - **설치형**은 앱을 완전히 종료하고 호환되는 새 시스템 설치기를 관리자 권한으로 실행해 기존 시스템 설치 위치를 선택합니다. 설치기는 사용자별 프로필 데이터와 추가 파일을 보존합니다. 호환되지 않거나 변경되었거나 실행 중인 설치본은 거부할 수 있습니다. 제작자는 2026-10-17에 Windows 10과 11에서 1.1 설치기의 업데이트 동작을 확인했습니다. 별도 실험 기능인 yt-dlp·Deno 업데이트는 직접 요청하며 재시작 뒤 적용합니다.
-- **포터블**은 앱을 완전히 종료하고 기존 폴더를 먼저 보관합니다. 새 ZIP은 별도의 빈 폴더에 풀고, 보관한 `data/`를 새 `FK_YT/` 안에 복사한 뒤 실행하세요.
+- **포터블**은 앱을 완전히 종료하고 기존 폴더를 먼저 보관합니다. 새 ZIP은 별도의 빈 폴더에 풀고, 보관한 `data/`를 새 `FK_YT/` 안에 복사한 뒤 실행하세요. 이전에 재생 도구를 수동으로 업데이트했고 설정에 예전 버전이 표시된다면, 설정에서 **동봉 버전 사용**을 누르고 앱을 다시 시작하세요.
 - **포터블·예전 사용자별 설치본에서 이동:** 자동으로 가져오지 않습니다. 두 앱을 모두 닫고 원본 데이터를 보관한 뒤, 설치를 마치고 원래 Windows 사용자로 **빈** `%LOCALAPPDATA%\FK_YT\data`에 복사합니다. SQLite DB를 병합하거나 이미 사용 중인 데이터 폴더에 덮어쓰지 마세요. 예전 사용자별 앱·바로가기·데이터는 별도로 남습니다.
 - 로그인 정보는 Windows 사용자 계정에 묶여 있습니다. 다른 PC·Windows 계정으로 옮기면 로그인 연결을 다시 해야 할 수 있습니다.
 
@@ -166,27 +166,27 @@ FK_YT를 완전히 종료한 뒤 Windows **설정 → 앱 → FK_YT → 제거**
 
 ### 파일 확인과 다운로드 명령
 
-설치기는 게시자 코드 서명 없이 제공합니다. PowerShell에서 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.3-Setup-x64.exe'`를 실행하고 해당 파일에 기재된 해시와 비교하세요. [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/SHA256SUMS.txt) · [배포 파일 목록](docs/RELEASE-1.3.md#release-files)
+설치기는 게시자 코드 서명 없이 제공합니다. PowerShell에서 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.3.1-Setup-x64.exe'`를 실행하고 해당 파일에 기재된 해시와 비교하세요. [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/SHA256SUMS.txt) · [배포 파일 목록](docs/RELEASE-1.3.1.md#release-files)
 
-아래 GitHub CLI 명령은 릴리스 페이지에 있는 `v1.3` 파일을 요청합니다.
+아래 GitHub CLI 명령은 릴리스 페이지에 있는 `v1.3.1` 파일을 요청합니다.
 
 ```powershell
-gh release view v1.3 --repo mobsweeper/FK_YT
-gh release download v1.3 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3-portable.zip' --dir .\FK_YT-download
+gh release view v1.3.1 --repo mobsweeper/FK_YT
+gh release download v1.3.1 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3.1-portable.zip' --dir .\FK_YT-download
 # 설치형을 원하면 위 다운로드 대신:
-gh release download v1.3 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3-Setup-x64.exe' --dir .\FK_YT-download
+gh release download v1.3.1 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3.1-Setup-x64.exe' --dir .\FK_YT-download
 ```
 
 ### 개발자: 저장소 빌드와 최종 배포본은 구분해 주세요
 
-**`FK_YT-1.3-source.zip`은 포터블과 설치형이 함께 사용하는 제품 소스입니다.** 설치기 소스는 별도 `FK_YT-1.3-installer-source.zip`에 있습니다. [소스와 빌드 안내](docs/RELEASE-1.3.md#source-and-build)
+**`FK_YT-1.3.1-source.zip`은 포터블과 설치형이 함께 사용하는 제품 소스입니다.** 설치기 소스는 별도 `FK_YT-1.3.1-installer-source.zip`에 있습니다. [소스와 빌드 안내](docs/RELEASE-1.3.1.md#source-and-build)
 
 저장소 앱을 컴파일하려면 Git, **PowerShell 7**, 인터넷이 필요합니다. Git으로 공개 저장소를 복제할 때는 GitHub 로그인이 필요 없습니다. 일반 사용자는 이 과정을 할 필요가 없습니다.
 
 ```powershell
 git clone https://github.com/mobsweeper/FK_YT.git
 Set-Location FK_YT
-git checkout v1.3
+git checkout v1.3.1
 pwsh -NoProfile -File .\scripts\Bootstrap.ps1 -Component Dotnet
 pwsh -NoProfile -File .\scripts\Build.ps1
 ```
@@ -241,7 +241,7 @@ README.md              메인 화면의 영문·한국어 README
 readme_KR.md            한국어 안내
 readme_EN.md            English guide
 assets/screenshots/    계정 정보를 가린 README 스크린샷
-docs/RELEASE-1.3.md     배포 파일·해시·설치·대응 소스
+docs/RELEASE-1.3.1.md     배포 파일·해시·설치·대응 소스
 docs/RELEASE-1.1.2.md   이전 배포 기록
 docs/BUILD-1.1.2.md     이전 버전 빌드·배포 조립 안내
 src/                    C# WPF 앱, 플레이어 제어, 계정·저장 서비스
@@ -251,7 +251,7 @@ dependencies.lock.json  개발 도구와 과거 공급사 런타임의 잠금 �
 LICENSE / license.md    MIT 라이선스·배포 안내
 ```
 
-`tools/`, `runtime/`, `dist/`, `data/`는 로컬 빌드·실행 과정에서 생기는 폴더입니다. 설치기 소스는 별도 `FK_YT-1.3-installer-source.zip`으로 받을 수 있습니다. 사용자 데이터나 개인백업은 배포 파일에 포함하지 않습니다.
+`tools/`, `runtime/`, `dist/`, `data/`는 로컬 빌드·실행 과정에서 생기는 폴더입니다. 설치기 소스는 별도 `FK_YT-1.3.1-installer-source.zip`으로 받을 수 있습니다. 사용자 데이터나 개인백업은 배포 파일에 포함하지 않습니다.
 
 ## 9. 제한 사항
 
@@ -297,9 +297,9 @@ yt-dlp 소스와 번들 EXE의 구분은 [프로젝트의 라이선스 설명](h
 
 최종 mpv는 원본 커밋에 빌드 식별용 버전 메타데이터 변경을 적용해 FK_YT에서 만든 바이너리입니다. FFmpeg는 MSYS2 UCRT64 빌드와 해당 의존 라이브러리 묶음입니다. 예전 Bootstrap의 shinchiro/Gyan 바이너리와 같다고 표시하지 않습니다. 원본과 수정 부분의 고지·빌드 지침을 함께 보존했습니다.
 
-동봉한 yt-dlp 2026.10.26의 대응 소스는 1.3 앱 소스 ZIP에 포함합니다. mpv와 FFmpeg의 대응 소스는 FK_YT에서 준비한 v1.1.2 미디어 소스 모음 두 개입니다. 두 파일은 **독립 ZIP**입니다. 둘 다 받아 **같은 폴더에 part1 → part2 순서로** 푸세요. [1.3 앱 소스](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-source.zip) · [미디어 part 1](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part1.zip) · [미디어 part 2](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part2.zip)
+동봉한 yt-dlp 2026.11.23의 대응 소스는 1.3.1 앱 소스 ZIP에 포함합니다. mpv와 FFmpeg의 대응 소스는 FK_YT에서 준비한 v1.1.2 미디어 소스 모음 두 개입니다. 두 파일은 **독립 ZIP**입니다. 둘 다 받아 **같은 폴더에 part1 → part2 순서로** 푸세요. [1.3.1 앱 소스](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/FK_YT-1.3.1-source.zip) · [미디어 part 1](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part1.zip) · [미디어 part 2](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part2.zip)
 
-1.3 배포 안내에서 앱·설치기 소스, 해시, 번들 도구의 대응 소스를 확인할 수 있습니다. 별도 소스 접근 비용을 받지 않습니다. 재배포할 때도 실행 파일과 대응 소스를 함께 접근할 수 있게 유지해야 합니다. v1.1.2의 소스 대응표에는 그대로 사용하는 미디어 ZIP 두 개와 해시가 적혀 있습니다. [1.3 배포 안내](docs/RELEASE-1.3.md#corresponding-source) · [v1.1.2 소스 대응표](docs/SOURCE-ACCESS-1.1.2.txt) · [추가 라이선스 고지](docs/LICENSES-SUPPLEMENT-1.1.txt)
+1.3.1 배포 안내에서 앱·설치기 소스, 해시, 번들 도구의 대응 소스를 확인할 수 있습니다. 별도 소스 접근 비용을 받지 않습니다. 재배포할 때도 실행 파일과 대응 소스를 함께 접근할 수 있게 유지해야 합니다. v1.1.2의 소스 대응표에는 그대로 사용하는 미디어 ZIP 두 개와 해시가 적혀 있습니다. [1.3.1 배포 안내](docs/RELEASE-1.3.1.md#corresponding-source) · [v1.1.2 소스 대응표](docs/SOURCE-ACCESS-1.1.2.txt) · [추가 라이선스 고지](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/LICENSES-SUPPLEMENT.txt)
 
 이전 미디어 소스 배포 당시 배포자 메타데이터·깨진 링크를 복구하고 출처를 기록한 법적 고지 파일 6개를 추가했습니다. native Windows 빌드에 쓰이지 않는 macOS 전용 crate ZIP 4개는 제외했으며, 플랫폼 공통 upstream 잠금 파일은 그대로 보존했습니다. 복구 근거가 없는 과거 URL은 미확보로 표기했습니다. [당시 라이선스 점검 기록](docs/LICENSING-1.1.md)
 
@@ -327,3 +327,8 @@ yt-dlp 소스와 번들 EXE의 구분은 [프로젝트의 라이선스 설명](h
 - 영상이 로딩 직후 끝나는 경우의 자동재생과 대기열 처리를 개선했습니다.
 - 창 너비에 따라 사이드바를 줄이고 채널 선택 목록을 띄웁니다. 연결 후 전체 채널 목록을 유지하고, 계정 버튼이 비활성화된 상태에서도 상태 도움말을 표시합니다.
 - 번들 yt-dlp를 **2026.10.26**으로 업데이트했습니다. 독립 실행 파일에는 Python **3.14.10**이 포함됩니다.
+
+## 14. 1.3.1 패치노트
+
+- 일부 로그인 계정에서 영상의 미리보기 이미지만 조회돼 재생이 실패하던 문제를 고쳤습니다. 동봉한 yt-dlp는 **2026.11.23**, Deno는 **2.9.8**입니다.
+- FK_YT가 트레이에 있을 때 같은 폴더의 실행 파일을 다시 열면 기존 창이 앞으로 나옵니다.

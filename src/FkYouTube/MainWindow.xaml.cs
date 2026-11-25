@@ -169,11 +169,9 @@ public partial class MainWindow : Window
     }
     private void SetStatus(string text){_statusTextFactory=null;StatusText.Text=text;}
     private void SetStatus(Func<string> text){_statusTextFactory=text;StatusText.Text=text();}
-    private void SetFeedUiText(string text){_feedTextFactory=null;FeedState.Text=text;}
     private void SetFeedUiText(Func<string> text){_feedTextFactory=text;FeedState.Text=text();}
     private void SetCommentUiText(string text){_commentTextFactory=null;CommentState.Text=text;}
     private void SetCommentUiText(Func<string> text){_commentTextFactory=text;CommentState.Text=text();}
-    private void SetSessionUiText(string text){_sessionTextFactory=null;SessionState.Text=text;}
     private void SetSessionUiText(Func<string> text){_sessionTextFactory=text;SessionState.Text=text();}
     private void SetSyncUiText(Func<string> text){_syncTextFactory=text;_syncMessage=text();}
     private void SetPageUiText(string text){_pageTextFactory=null;_browseTitle=text;PageTitle.Text=text;}

@@ -29,12 +29,6 @@
    <Setter Property="FontSize" Value="18"/>
    <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
-  <Style x:Key="SettingGroup" TargetType="Border">
-   <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-   <Setter Property="BorderThickness" Value="0,0,0,1"/>
-   <Setter Property="Padding" Value="0,0,0,16"/>
-   <Setter Property="Margin" Value="0,0,0,16"/>
-  </Style>
   <Style TargetType="ToolTip">
    <Setter Property="Background" Value="{StaticResource Surface}"/>
    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -87,10 +81,6 @@
    <Setter Property="Background" Value="Transparent"/>
    <Setter Property="Padding" Value="8,6"/>
    <Setter Property="Margin" Value="0"/>
-  </Style>
-  <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource QuietButton}">
-   <Setter Property="MinWidth" Value="34"/>
-   <Setter Property="MinHeight" Value="32"/>
   </Style>
   <Style x:Key="NavigationButton" TargetType="Button" BasedOn="{StaticResource QuietButton}">
    <Setter Property="HorizontalContentAlignment" Value="Left"/>

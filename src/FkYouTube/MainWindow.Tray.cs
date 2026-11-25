@@ -14,6 +14,7 @@ public partial class MainWindow
     private Window? _trayHiddenPopout;
     private WindowState _trayUnminimizedState = WindowState.Normal;
     private bool _trayHideQueued, _trayExitRequested, _traySessionEnding, _trayWindowClosed;
+    private long _trayVisibilityGeneration;
     private int? _futurePrefetchResetGeneration, _futurePrefetchSuppressedGeneration;
     private Task _futurePrefetchResetTask = Task.CompletedTask;
 
@@ -95,7 +96,11 @@ public partial class MainWindow
         closing.Cancel = true;
         _trayHideQueued = true;
         // WPF is still evaluating Closing; leave that call before Hide/Show.
-        _ = Dispatcher.BeginInvoke(HideToTray, DispatcherPriority.Normal);
+        var generation=++_trayVisibilityGeneration;
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            if(generation==_trayVisibilityGeneration)HideToTray();
+        }, DispatcherPriority.Normal);
         return true;
     }
 
@@ -125,6 +130,8 @@ public partial class MainWindow
     private void RestoreFromTray()
     {
         if (_trayWindowClosed || _traySessionEnding || _closing || Dispatcher.HasShutdownStarted) return;
+        ++_trayVisibilityGeneration;
+        _trayHideQueued=false;
         var wasInTray = IsInTray;
         var previousMode = EffectiveNextAudioOnly;
         IsInTray = false;
@@ -141,6 +148,8 @@ public partial class MainWindow
         }
         Activate();
     }
+
+    internal void RestoreFromExternalLaunch() => RestoreFromTray();
 
     private void RestoreIfTrayIconUnavailable()
     {

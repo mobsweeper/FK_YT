@@ -1,4 +1,4 @@
-# FK_YT 1.3
+# FK_YT 1.3.1
 
 **[한국어 안내](readme_KR.md)** · [English](README.md)
 
@@ -15,12 +15,12 @@ A personal YouTube viewer for Windows. Lists and a player, without keeping the Y
 
 *Account details and selected thumbnails are blurred. Videos and artwork shown belong to their respective rights holders.*
 
-For 1.3 installation and source access, see the [release guide](docs/RELEASE-1.3.md). For changes since 1.1.2, see the [1.3 patch notes](#13-13-patch-notes).
+For 1.3.1 installation and source access, see the [release guide](docs/RELEASE-1.3.1.md). For the playback fix and tray update, see the [1.3.1 patch notes](#14-131-patch-notes).
 
 <!-- PUBLICATION-STATUS-BEGIN -->
-> **[FK_YT v1.3 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3)**
+> **[FK_YT v1.3.1 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3.1)**
 >
-> [Portable ZIP](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-portable.zip) · [Windows x64 installer](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-Setup-x64.exe) · [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/SHA256SUMS.txt)
+> [Portable ZIP](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/FK_YT-1.3.1-portable.zip) · [Windows x64 installer](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/FK_YT-1.3.1-Setup-x64.exe) · [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/SHA256SUMS.txt)
 <!-- PUBLICATION-STATUS-END -->
 
 ## 1. Language
@@ -111,16 +111,16 @@ There are security limits. Tools may need temporary plaintext cookie files, and 
 - Users **do not need to install .NET, Python, Deno, mpv, FFmpeg, or an SDK separately**. The required runtimes and tools are included in the app folder. Setup uses Windows' built-in 64-bit PowerShell.
 - Account connection uses Firefox or a Netscape-format cookie file you supply. Search and some playback also work without signing in.
 
-**The 1.3 portable and installed versions use the same app DLL and the same application source.** The installer adds `FK_YT.install-mode` to select each Windows user's data directory. The table lists the tools shipped with 1.3. Manually selected tool updates can differ from this table.
+**The 1.3.1 portable and installed versions use the same app DLL and the same application source.** The installer adds `FK_YT.install-mode` to select each Windows user's data directory. The table lists the tools shipped with 1.3.1. Manually selected tool updates can differ from this table.
 
 | Bundled component | Version / build | Purpose |
 | --- | --- | --- |
 | .NET / Windows Desktop Runtime | Both **10.0.13**, self-contained win-x64 | Run the WPF app |
 | Python | **3.13.16**, embedded x64 | Feed/account workers |
-| yt-dlp EXE / Python package | **2026.10.26** | Extraction, metadata, downloads |
+| yt-dlp EXE / Python package | **2026.11.23** | Extraction, metadata, downloads |
 | Python inside yt-dlp EXE | **3.14.10** | Separate from the worker's Python |
 | yt-dlp-ejs | **0.8.0** | JavaScript support |
-| Deno | **2.9.7** | JavaScript runtime |
+| Deno | **2.9.8** | JavaScript runtime |
 | mpv | **0.41.0-dev-gec38361c56-fkyt** | Playback; build prepared by FK_YT |
 | FFmpeg / ffprobe | **9.0.2**, MSYS2 UCRT64 `9.0.2-1` | GPLv3-enabled shared-library build |
 | Microsoft.Data.Sqlite / SQLitePCLRaw | **10.0.13 / 3.0.5** | Local database |
@@ -132,9 +132,9 @@ Build-only tools are **.NET SDK 10.0.402**, **7zr 26.04** for extraction, and **
 
 ### For users: which file should I get?
 
-**We recommend `FK_YT-1.3-portable.zip` for a straightforward setup.** Extract the whole archive into a new writable folder and run `FK_YT.exe` inside `FK_YT` with your normal Windows permissions. **Both packages provide the same viewing/playback features, app DLL, and bundled runtime tools.** The installer adds machine-wide program installation, shared shortcuts, Windows removal registration, and the marker that selects per-user data. Check the release checksum for either download.
+**We recommend `FK_YT-1.3.1-portable.zip` for a straightforward setup.** Extract the whole archive into a new writable folder and run `FK_YT.exe` inside `FK_YT` with your normal Windows permissions. **Both packages provide the same viewing/playback features, app DLL, and bundled runtime tools.** The installer adds machine-wide program installation, shared shortcuts, Windows removal registration, and the marker that selects per-user data. Check the release checksum for either download.
 
-Public release downloads are available without a GitHub sign-in. Choose the portable ZIP or Setup EXE to run the app. The source ZIP is for developers. [FK_YT 1.3 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3)
+Public release downloads are available without a GitHub sign-in. Choose the portable ZIP or Setup EXE to run the app. The source ZIP is for developers. [FK_YT 1.3.1 on GitHub Releases](https://github.com/mobsweeper/FK_YT/releases/tag/v1.3.1)
 
 Setup checks each fixed payload file once with SHA-256 in protected staging, reuses directory-permission checks within each phase, and checks file paths, types and lengths during installation.
 
@@ -154,7 +154,7 @@ The directory page accepts an empty app folder directly inside native 64-bit Pro
 ### Updates and data
 
 - **Installed version.** Fully exit FK_YT before running a compatible newer machine installer as administrator. Select the existing machine installation. Setup preserves per-user profile data and user-added files. Incompatible, modified, or running installations can be refused. The maintainer confirmed installer updates for version 1.1 on Windows 10 and Windows 11 on 2026-10-17. The experimental yt-dlp/Deno updater is manual and applies after restart.
-- **Portable version.** Fully exit the app and keep the old folder as a backup. Extract the new ZIP into a separate empty folder, copy your preserved `data/` into the new `FK_YT/` folder, then launch it.
+- **Portable version.** Fully exit the app and keep the old folder as a backup. Extract the new ZIP into a separate empty folder, copy your preserved `data/` into the new `FK_YT/` folder, then launch it. If you previously installed a tool update and Settings still shows older versions, choose **Use bundled version** and restart FK_YT.
 - **Moving from portable or an earlier per-user install:** Nothing is imported automatically. Close both apps, keep the original data, and copy it as the same Windows user into an **empty** `%LOCALAPPDATA%\FK_YT\data` after installation. Do not merge SQLite databases or overwrite a data folder already in use. Existing per-user apps, shortcuts, and data are left separate.
 - Sign-in data is tied to the Windows user. Moving to a different PC or Windows account may require reconnecting the session.
 
@@ -166,27 +166,27 @@ To delete your own installed-app data separately, fully exit FK_YT and remove yo
 
 ### File verification and download commands
 
-The installer is supplied without a publisher code signature. Run `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.3-Setup-x64.exe'` in PowerShell and compare the result with the listed checksum for that file. [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/SHA256SUMS.txt) · [Download list](docs/RELEASE-1.3.md#release-files)
+The installer is supplied without a publisher code signature. Run `Get-FileHash -Algorithm SHA256 -LiteralPath '.\FK_YT-1.3.1-Setup-x64.exe'` in PowerShell and compare the result with the listed checksum for that file. [SHA256SUMS.txt](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/SHA256SUMS.txt) · [Download list](docs/RELEASE-1.3.1.md#release-files)
 
-These GitHub CLI commands request the `v1.3` assets listed on the release page.
+These GitHub CLI commands request the `v1.3.1` assets listed on the release page.
 
 ```powershell
-gh release view v1.3 --repo mobsweeper/FK_YT
-gh release download v1.3 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3-portable.zip' --dir .\FK_YT-download
+gh release view v1.3.1 --repo mobsweeper/FK_YT
+gh release download v1.3.1 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3.1-portable.zip' --dir .\FK_YT-download
 # For the installer, use this instead of the portable download:
-gh release download v1.3 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3-Setup-x64.exe' --dir .\FK_YT-download
+gh release download v1.3.1 --repo mobsweeper/FK_YT --pattern 'FK_YT-1.3.1-Setup-x64.exe' --dir .\FK_YT-download
 ```
 
 ### For developers: repository builds and the final release differ
 
-**`FK_YT-1.3-source.zip` contains the common product source for both portable and installed apps.** The installer has its own `FK_YT-1.3-installer-source.zip`. [Source and build](docs/RELEASE-1.3.md#source-and-build)
+**`FK_YT-1.3.1-source.zip` contains the common product source for both portable and installed apps.** The installer has its own `FK_YT-1.3.1-installer-source.zip`. [Source and build](docs/RELEASE-1.3.1.md#source-and-build)
 
 Compiling the repository requires Git, **PowerShell 7**, and internet access. Cloning this public repository with Git does not require a GitHub sign-in. Ordinary users do not need to build anything.
 
 ```powershell
 git clone https://github.com/mobsweeper/FK_YT.git
 Set-Location FK_YT
-git checkout v1.3
+git checkout v1.3.1
 pwsh -NoProfile -File .\scripts\Bootstrap.ps1 -Component Dotnet
 pwsh -NoProfile -File .\scripts\Build.ps1
 ```
@@ -241,7 +241,7 @@ README.md              Bilingual repository landing README
 readme_KR.md            Korean guide
 readme_EN.md            English guide
 assets/screenshots/    README screenshots with account details blurred
-docs/RELEASE-1.3.md     Release files, hashes, installation, and source access
+docs/RELEASE-1.3.1.md     Release files, hashes, installation, and source access
 docs/RELEASE-1.1.2.md   Previous release record
 docs/BUILD-1.1.2.md     Previous build and release assembly instructions
 src/                    C# WPF app, player, account and storage services
@@ -251,7 +251,7 @@ dependencies.lock.json  Development tools and historical supplier runtime pins
 LICENSE / license.md    MIT license and distribution guidance
 ```
 
-`tools/`, `runtime/`, `dist/`, and `data/` are local build/runtime folders. The installer source is available in `FK_YT-1.3-installer-source.zip`. User data and personal backups are excluded from release files.
+`tools/`, `runtime/`, `dist/`, and `data/` are local build/runtime folders. The installer source is available in `FK_YT-1.3.1-installer-source.zip`. User data and personal backups are excluded from release files.
 
 ## 9. Limitations
 
@@ -297,9 +297,9 @@ See [yt-dlp's licensing explanation](https://github.com/yt-dlp/yt-dlp#licensing)
 
 The final mpv binary was built by FK_YT from the upstream commit with a build-identifying version-metadata change. FFmpeg is the MSYS2 UCRT64 build and its dependency cohort. These are not the historical shinchiro/Gyan binaries acquired by Bootstrap. Original and modification notices and build instructions are retained.
 
-The 1.3 app source ZIP contains the corresponding-source collection for the bundled yt-dlp 2026.10.26. The bundled mpv and FFmpeg use the two FK_YT-prepared media collections from v1.1.2. Download both **independent ZIPs** and extract part1, then part2, into the **same folder**. [1.3 app source](https://github.com/mobsweeper/FK_YT/releases/download/v1.3/FK_YT-1.3-source.zip) · [Media part 1](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part1.zip) · [Media part 2](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part2.zip)
+The 1.3.1 app source ZIP contains the corresponding-source collection for the bundled yt-dlp 2026.11.23. The bundled mpv and FFmpeg use the two FK_YT-prepared media collections from v1.1.2. Download both **independent ZIPs** and extract part1, then part2, into the **same folder**. [1.3.1 app source](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/FK_YT-1.3.1-source.zip) · [Media part 1](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part1.zip) · [Media part 2](https://github.com/mobsweeper/FK_YT/releases/download/v1.1.2/FK_YT_mpv-FFmpeg-part2.zip)
 
-The 1.3 distribution guide lists the app and installer source, checksums, and source for the bundled tools. Source downloads are available without an additional fee. Keep matching source accessible alongside the binaries when redistributing. The v1.1.2 source map records the two retained media ZIPs and their checksums. [1.3 distribution guide](docs/RELEASE-1.3.md#corresponding-source) · [v1.1.2 source map](docs/SOURCE-ACCESS-1.1.2.txt) · [Supplemental notices](docs/LICENSES-SUPPLEMENT-1.1.txt)
+The 1.3.1 distribution guide lists the app and installer source, checksums, and source for the bundled tools. Source downloads are available without an additional fee. Keep matching source accessible alongside the binaries when redistributing. The v1.1.2 source map records the two retained media ZIPs and their checksums. [1.3.1 distribution guide](docs/RELEASE-1.3.1.md#corresponding-source) · [v1.1.2 source map](docs/SOURCE-ACCESS-1.1.2.txt) · [Supplemental notices](https://github.com/mobsweeper/FK_YT/releases/download/v1.3.1/LICENSES-SUPPLEMENT.txt)
 
 For the earlier media-source publication, distributor metadata and broken links were repaired, and six legal-notice files were added with their provenance recorded. Four macOS-only crate archives unused by the native Windows build were excluded; upstream cross-platform locks remain intact. Unrecoverable historical URL fields are marked unknown. See the [original licensing record](docs/LICENSING-1.1.md).
 
@@ -327,3 +327,8 @@ Based on **22 completed parallel review rounds × 15 review assignments**, compl
 - Improved autoplay and queue handling when a video ends just after loading.
 - The sidebar adapts to the window width with a compact channel menu. Connecting an account keeps its full channel list, and the account-status tooltip works while its button is disabled.
 - Updated bundled yt-dlp to **2026.10.26**. The standalone executable embeds Python **3.14.10**.
+
+## 14. 1.3.1 patch notes
+
+- Fixed playback for some signed-in videos where the extractor returned only storyboard thumbnails. The release bundles **yt-dlp 2026.11.23** and **Deno 2.9.8**.
+- Launching FK_YT from the same folder while it is in the system tray brings its existing window to the front.

@@ -35,7 +35,6 @@ public sealed class FeedService : IAsyncDisposable
                     _process=OwnedProcess.Start(_paths.Python,_paths.BuildPythonArguments(_paths.FeedWorker,unbuffered:true),_paths.Root);
                     _drain=DrainAsync(_process.StandardError);
                 }
-                open=true;
             }
             var process=_process!;var id=Guid.NewGuid().ToString("N");
             var output=_output??=new BoundedLineReader(process.StandardOutput,BoundedTextReader.FeedLineLimit);

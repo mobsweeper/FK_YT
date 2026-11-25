@@ -322,8 +322,6 @@ public sealed class YouTubeService
         if(nameLength>0 && char.IsHighSurrogate(name[nameLength-1]))nameLength--;
         return name[..nameLength]+suffix;
     }
-    public async Task<IReadOnlyList<VideoItem>> GetRelatedAsync(string url,CancellationToken ct,bool incognito=false)=>
-        (await GetRelatedPageAsync(url,ct,incognito)).Items;
     public async Task<RelatedVideosResult> GetRelatedPageAsync(string url,CancellationToken ct,bool incognito=false)
     {
         ct.ThrowIfCancellationRequested();
@@ -558,15 +556,6 @@ public sealed class YouTubeService
         if(video.TryGetProperty("release_timestamp",out var release) && release.ValueKind==JsonValueKind.Number && release.TryGetInt64(out var seconds))
             try{scheduled=DateTimeOffset.FromUnixTimeSeconds(seconds);}catch(ArgumentOutOfRangeException){throw InvalidMetadata();}
         return new(videoId,status,scheduled);
-    }
-
-    public async Task<LiveHlsMedia> ResolveLiveAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null)
-    {
-        // Obtain the catalog even when no HLS rendition is available, so an
-        // unsupported transport gets an explicit message rather than an opaque
-        // yt-dlp "requested format unavailable" extraction failure.
-        var resolution=await ResolvePlaybackAsync(url,maxHeight,ct,incognito,subtitleLanguage);
-        return resolution.Live??throw UnsupportedLiveMedia();
     }
 
     public async Task<PlaybackResolution> ResolvePlaybackAsync(string url,int maxHeight,CancellationToken ct,bool incognito=false,string? subtitleLanguage=null,bool audioOnly=false,bool liveFromStart=false,bool verifiedVod=false)

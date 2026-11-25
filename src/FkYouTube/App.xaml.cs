@@ -5,6 +5,9 @@ public partial class App : Application
 {
     private Mutex? _instance;
     private FileStream? _dataOwnership;
+    private InstanceActivation? _activation;
+    private bool _activationPending;
+    private bool _activationWindowReady;
     private readonly StartupFailureBoundary _startup;
     public App()
     {
@@ -25,20 +28,22 @@ public partial class App : Application
             var rootArg=Array.IndexOf(e.Args,"--root");
             var paths=new RuntimePaths(rootArg>=0 && rootArg+1<e.Args.Length?e.Args[rootArg+1]:null);
             _instance=new Mutex(true,paths.InstanceMutexName,out var first);
-            if(!first){MessageBox.Show(UiText.T("이 폴더의 FK_YT가 이미 실행 중입니다.","FK_YT is already running from this folder.","このフォルダーの FK_YT はすでに実行中です。"),"FK_YT");Shutdown();return;}
+            if(!first){await RestoreExistingInstanceAsync(paths);return;}
             // Retain the root mutex for older same-root releases, and claim shared
             // Data before toolchain/session/DB initialization or any worker starts.
             try { _dataOwnership=paths.AcquireDataOwnership(); }
             catch(IOException error) when(error.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021))
             {
-                MessageBox.Show(UiText.T("같은 데이터 폴더를 사용하는 FK_YT가 이미 실행 중입니다. 다른 Windows 세션도 확인해 주세요.","FK_YT is already using this data folder. Check other Windows sessions as well.","同じデータフォルダーを使用する FK_YT がすでに実行中です。他の Windows セッションも確認してください。"),"FK_YT");
-                Shutdown();return;
+                await RestoreExistingInstanceAsync(paths);return;
             }
             catch(Exception error) when(error is IOException or UnauthorizedAccessException)
             {
                 MessageBox.Show(UiText.T("데이터 폴더를 잠글 수 없어 시작하지 않았습니다. 폴더 권한과 저장소 상태를 확인해 주세요.","FK_YT could not lock the data folder and did not start. Check folder permissions and storage availability.","データフォルダーをロックできないため起動しませんでした。フォルダーの権限と保存先の状態を確認してください。"),"FK_YT");
                 Shutdown();return;
             }
+            // Listen before slow toolchain initialization. A second launch queues
+            // a restore request even while the first window is still being created.
+            _activation=new InstanceActivation(paths,QueueInstanceActivation);
             // Freeze the verified local tool selection before constructing services
             // or starting any worker. Startup does not check for online updates.
             await Playback.LiveFromStartTransport.CleanupStaleAsync(paths);
@@ -48,13 +53,38 @@ public partial class App : Application
             // Loaded is async void: later continuations belong to the visible
             // window's ordinary runtime handler, rather than the startup catch.
             _startup.MarkWindowShown();
+            CompleteInstanceActivationStartup(window);
         });
+    }
+    private void CompleteInstanceActivationStartup(MainWindow window)
+    {
+        _activationWindowReady=true;
+        if(_activationPending){_activationPending=false;window.RestoreFromExternalLaunch();}
+    }
+    private async Task RestoreExistingInstanceAsync(RuntimePaths paths)
+    {
+        if(!await InstanceActivation.TryNotifyAsync(paths))
+            MessageBox.Show(UiText.T("기존 FK_YT 창을 자동으로 열지 못했습니다. 트레이 아이콘이나 다른 Windows 세션을 확인해 주세요. 이전 버전이 실행 중이면 종료 후 다시 실행해 주세요.",
+                "The existing FK_YT window could not be restored automatically. Check the tray icon or other Windows sessions. If an older version is running, exit it and try again.",
+                "実行中の FK_YT ウィンドウを自動で復元できませんでした。通知領域のアイコンや別の Windows セッションを確認してください。旧バージョンが実行中の場合は終了してから再度起動してください。"),"FK_YT");
+        Shutdown();
+    }
+    private void QueueInstanceActivation()
+    {
+        if(Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)return;
+        try{_=Dispatcher.BeginInvoke(() =>
+        {
+            if(_startup.Failed)return;
+            if(_activationWindowReady && MainWindow is MainWindow window)window.RestoreFromExternalLaunch();
+            else _activationPending=true;
+        });}
+        catch(InvalidOperationException)when(Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished){ }
     }
     private static string StartupFailureMessage(Exception error)=>UiText.T(
         "FK_YT를 시작하지 못해 앱을 종료합니다. 폴더 권한과 저장소 상태를 확인한 뒤 다시 실행해 주세요.\n",
         "FK_YT could not start and will close. Check folder permissions and storage availability, then try again.\n",
         "FK_YT を起動できないため終了します。フォルダーの権限と保存先の状態を確認してから、再度起動してください。\n")+error.GetType().Name;
-    protected override void OnExit(ExitEventArgs e){_dataOwnership?.Dispose();_instance?.Dispose();base.OnExit(e);}
+    protected override void OnExit(ExitEventArgs e){_activation?.Dispose();_dataOwnership?.Dispose();_instance?.Dispose();base.OnExit(e);}
 }
 
 // Keep the failure policy testable without showing a modal dialog or creating

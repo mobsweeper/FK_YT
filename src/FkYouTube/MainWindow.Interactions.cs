@@ -127,8 +127,6 @@ public partial class MainWindow
         PlayingTitleButton.Focus();
     }
 
-    private void ShowAuthenticationNotice(string message, bool canCancel)=>ShowAuthenticationNotice(()=>message,canCancel);
-
     private void ShowAuthenticationNotice(Func<string> message, bool canCancel)
     {
         _authenticationUiText = message;
